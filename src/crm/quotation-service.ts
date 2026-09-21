@@ -143,7 +143,7 @@ export async function createQuotation(input: CreateQuotationInput) {
       },
       items: bridgeItems,
       discount_percent: discountPct,
-      notes: `Generated via Chat GCM AI Brain (${projectName || 'Quotation'})`
+      notes: `Prepared by Technical Estimation Desk (${projectName || 'Quotation'})`
     });
 
     if (officialDoc && officialDoc.success) {

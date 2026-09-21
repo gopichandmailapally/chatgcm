@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GCM AI Sales Brain — Command Center</title>
+  <title>ChatGCM 2.0 — Executive AI Command Center</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -19,48 +19,50 @@
           <i class="fas fa-brain"></i>
         </div>
         <div class="brand-text">
-          <h2>Chat GCM</h2>
-          <span>AI Sales Brain</span>
+          <h2>Chat GCM 2.0</h2>
+          <span>AI Operations Brain</span>
         </div>
       </div>
 
       <nav class="nav-menu">
-        <button class="nav-item active" data-tab="dashboard">
-          <i class="fas fa-chart-pie"></i> Command Center
+        <button class="nav-item active" data-tab="whatsapp-hub">
+          <i class="fab fa-whatsapp" style="color:var(--accent-green);"></i> Live WhatsApp Hub
+          <span class="badge badge-green" id="wa-active-count">1</span>
+        </button>
+        <button class="nav-item" data-tab="kanban">
+          <i class="fas fa-columns" style="color:var(--accent-cyan);"></i> Visual Pipeline
         </button>
         <button class="nav-item" data-tab="leads">
-          <i class="fas fa-funnel-dollar"></i> Hot Leads CRM
+          <i class="fas fa-funnel-dollar" style="color:var(--accent-indigo);"></i> Hot Leads CRM
         </button>
         <button class="nav-item" data-tab="quotations">
-          <i class="fas fa-file-invoice-dollar"></i> Estimations & ERP
+          <i class="fas fa-file-invoice-dollar" style="color:var(--accent-amber);"></i> Estimations & ERP
+        </button>
+        <button class="nav-item" data-tab="logistics">
+          <i class="fas fa-truck-fast" style="color:#ec4899;"></i> Logistics & Bilty
+        </button>
+        <button class="nav-item" data-tab="websites">
+          <i class="fas fa-globe" style="color:#38bdf8;"></i> 9 Websites Sync
         </button>
         <button class="nav-item" data-tab="approvals">
-          <i class="fas fa-shield-alt"></i> Owner Approvals
+          <i class="fas fa-shield-alt" style="color:#f59e0b;"></i> Owner Approvals
           <span class="badge" id="approval-badge" style="display:none;">0</span>
         </button>
-        <button class="nav-item" data-tab="sandbox">
-          <i class="fas fa-terminal"></i> AI Test Sandbox
+        <button class="nav-item" data-tab="agent-audit">
+          <i class="fas fa-user-check" style="color:#10b981;"></i> Agent Audit & KPIs
+          <span class="badge badge-green" id="agent-actions-badge">0</span>
         </button>
-        <button class="nav-item" data-tab="products">
-          <i class="fas fa-boxes"></i> Pricing Matrix
-        </button>
-        <button class="nav-item" data-tab="integration">
-          <i class="fas fa-code"></i> Embed Widget
-        </button>
-        <button class="nav-item" data-tab="whatsapp">
-          <i class="fab fa-whatsapp" style="color:#22c55e;"></i> WhatsApp Automation
-        </button>
-        <a href="https://gcm.enterprises/admin/documents.php" target="_blank" class="nav-item" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:10px; margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px;">
-          <i class="fas fa-external-link-alt" style="color:#6366f1;"></i> GCM ERP Billing &rarr;
+        <a href="https://gcm.enterprises/admin/documents.php" target="_blank" class="nav-item" style="text-decoration:none; color:inherit; display:flex; align-items:center; gap:10px; margin-top: 10px; border-top: 1px solid var(--glass-border); padding-top: 14px;">
+          <i class="fas fa-external-link-alt" style="color:var(--accent-indigo);"></i> GCM Corporate ERP &rarr;
         </a>
       </nav>
 
       <div class="sidebar-footer">
-        <div class="system-status">
-          <div class="status-pulse"></div>
-          <div>
-            <strong>GCM AI Engine</strong>
-            <small>Deterministic Math Active</small>
+        <div class="cloud-status-card">
+          <div class="status-radar"></div>
+          <div class="cloud-status-info">
+            <strong>+91 99123 99334</strong>
+            <small>Meta Cloud API Live (Nov 19)</small>
           </div>
         </div>
       </div>
@@ -68,925 +70,737 @@
 
     <!-- Main Content -->
     <main class="main-content">
-      <!-- Top Header -->
+      <!-- Top Executive Header -->
       <header class="top-bar">
         <div class="page-title">
-          <h1 id="tab-heading">Executive Command Center</h1>
-          <p id="tab-subheading">Real-time omnichannel sales intelligence across all GCM websites</p>
+          <h1 id="tab-heading">Live WhatsApp Conversation Hub</h1>
+          <p id="tab-subheading">Autonomous AI customer engagement on +91 99123 99334 across all 9 GCM websites</p>
         </div>
         <div class="top-actions">
-          <button class="btn btn-outline" onclick="loadDashboardStats()">
-            <i class="fas fa-sync-alt"></i> Refresh Data
+          <button class="btn btn-green" onclick="openQuickCallModal()">
+            <i class="fas fa-phone-volume"></i> + Quick Call (AI Handoff)
           </button>
-          <a href="/demo.html" target="_blank" class="btn btn-primary">
-            <i class="fas fa-external-link-alt"></i> Launch Live Demo
-          </a>
+          <button class="btn btn-primary" onclick="openQuotationModal()">
+            <i class="fas fa-file-invoice"></i> + New Quotation
+          </button>
+          <button class="btn btn-outline" onclick="syncAllWebsitesKnowledge()" title="Re-crawl and learn all websites on server">
+            <i class="fas fa-brain" style="color:var(--accent-indigo);"></i> Sync & Learn
+          </button>
+          <button class="btn btn-outline" onclick="loadAllData()">
+            <i class="fas fa-sync-alt"></i> Refresh
+          </button>
         </div>
       </header>
 
-      <div class="content-container">
-        <!-- 1. DASHBOARD TAB -->
-        <section id="tab-dashboard" class="tab-panel active">
-          <!-- KPI Cards -->
-          <div class="kpi-grid">
-            <div class="kpi-card">
-              <div class="kpi-icon blue"><i class="fas fa-users"></i></div>
-              <div class="kpi-data">
-                <span class="kpi-label">Today's Leads</span>
-                <h3 id="stat-leads">0</h3>
-                <small class="kpi-trend positive"><i class="fas fa-arrow-up"></i> Active CRM</small>
-              </div>
-            </div>
+      <!-- 9-Website Live Brand Bar -->
+      <div class="brand-filter-bar">
+        <button class="brand-pill active" data-site="all" onclick="filterByWebsite('all')">
+          <span class="brand-dot" style="background:#fff;"></span> All 9 Websites (<span id="count-all">0</span>)
+        </button>
+        <button class="brand-pill" data-site="gcm-enterprises" onclick="filterByWebsite('gcm-enterprises')">
+          <span class="brand-dot" style="background:#f59e0b;"></span> gcm.enterprises
+        </button>
+        <button class="brand-pill" data-site="gcmsafetynets" onclick="filterByWebsite('gcmsafetynets')">
+          <span class="brand-dot" style="background:#059669;"></span> gcmsafetynets.in
+        </button>
+        <button class="brand-pill" data-site="netsocean" onclick="filterByWebsite('netsocean')">
+          <span class="brand-dot" style="background:#14b8a6;"></span> netsocean.com
+        </button>
+        <button class="brand-pill" data-site="ushaleads" onclick="filterByWebsite('ushaleads')">
+          <span class="brand-dot" style="background:#8b5cf6;"></span> ushaleads.in
+        </button>
+        <button class="brand-pill" data-site="netsdial" onclick="filterByWebsite('netsdial')">
+          <span class="brand-dot" style="background:#ec4899;"></span> netsdial.com
+        </button>
+        <button class="brand-pill" data-site="gcminvisiblegrills" onclick="filterByWebsite('gcminvisiblegrills')">
+          <span class="brand-dot" style="background:#6366f1;"></span> gcminvisiblegrills.com
+        </button>
+        <button class="brand-pill" data-site="gcmnetting" onclick="filterByWebsite('gcmnetting')">
+          <span class="brand-dot" style="background:#2563eb;"></span> gcmnetting.com
+        </button>
+        <button class="brand-pill" data-site="russea" onclick="filterByWebsite('russea')">
+          <span class="brand-dot" style="background:#10b981;"></span> russea.in
+        </button>
+        <button class="brand-pill" data-site="gcmnettingsolutions" onclick="filterByWebsite('gcmnettingsolutions')">
+          <span class="brand-dot" style="background:#0284c7;"></span> gcmnettingsolutions.com
+        </button>
+      </div>
 
-            <div class="kpi-card">
-              <div class="kpi-icon emerald"><i class="fas fa-comments"></i></div>
-              <div class="kpi-data">
-                <span class="kpi-label">AI Conversations</span>
-                <h3 id="stat-conversations">0</h3>
-                <small class="kpi-trend neutral">Multi-tenant routing</small>
-              </div>
-            </div>
+      <!-- Red Alert Banner for Missing WhatsApp Leads -->
+      <div id="no-whatsapp-alert-banner" class="alert-banner" style="display:none;">
+        <div class="alert-banner-content">
+          <i class="fas fa-exclamation-triangle"></i>
+          <div>
+            <strong>🚨 ACTION REQUIRED FOR OWNER: <span id="no-wa-count">0</span> Leads Have No Active WhatsApp</strong>
+            <span>These customer numbers bounced on WhatsApp. Please call them directly to collect their active WhatsApp number.</span>
+          </div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="filterNoWhatsAppLeads()">
+          <i class="fas fa-phone"></i> View Missing Numbers
+        </button>
+      </div>
 
-            <div class="kpi-card">
-              <div class="kpi-icon purple"><i class="fas fa-file-invoice-dollar"></i></div>
-              <div class="kpi-data">
-                <span class="kpi-label">Quotations Generated</span>
-                <h3 id="stat-quotes">0</h3>
-                <small class="kpi-trend positive">18% GST Compliant</small>
-              </div>
+      <!-- Main Content Views -->
+      <div class="content-wrapper">
+        <!-- Live Metric Stats -->
+        <div class="stats-grid">
+          <div class="stat-card" style="--stat-color:var(--accent-indigo);">
+            <div class="stat-icon" style="color:var(--accent-indigo);">
+              <i class="fas fa-users-viewfinder"></i>
             </div>
-
-            <div class="kpi-card">
-              <div class="kpi-icon amber"><i class="fas fa-rupee-sign"></i></div>
-              <div class="kpi-data">
-                <span class="kpi-label">Pipeline Value</span>
-                <h3 id="stat-pipeline">₹0</h3>
-                <small class="kpi-trend positive">Total Live Quotes</small>
-              </div>
+            <div class="stat-details">
+              <p>Total Leads (All 9 Sites)</p>
+              <h3 id="stat-total-leads">0</h3>
+              <span>⚡ Real-time Ingestion</span>
             </div>
           </div>
 
-          <!-- Pending Approvals Alert Banner (if any) -->
-          <div class="alert-banner" id="approval-alert" style="display:none;">
-            <div class="alert-icon"><i class="fas fa-exclamation-triangle"></i></div>
-            <div class="alert-text">
-              <strong>Owner Action Required:</strong> You have <span id="approval-count-alert">0</span> discount request(s) exceeding autonomous AI thresholds.
+          <div class="stat-card" style="--stat-color:var(--accent-green);">
+            <div class="stat-icon" style="color:var(--accent-green);">
+              <i class="fab fa-whatsapp"></i>
             </div>
-            <button class="btn btn-sm btn-dark" onclick="switchTab('approvals')">Review Now</button>
-          </div>
-
-          <!-- 2 Columns: Recent Leads + Live Pipeline -->
-          <div class="dashboard-grid">
-            <div class="panel-card">
-              <div class="panel-header">
-                <h3><i class="fas fa-fire" style="color:#ef4444;"></i> Hot Leads Stream</h3>
-                <button class="btn btn-xs btn-outline" onclick="switchTab('leads')">View All</button>
-              </div>
-              <div class="table-responsive">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>Customer</th>
-                      <th>Website Brand</th>
-                      <th>Stage</th>
-                      <th>Value</th>
-                      <th>Time</th>
-                    </tr>
-                  </thead>
-                  <tbody id="recent-leads-tbody">
-                    <tr><td colspan="5" class="text-center">Loading leads...</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div class="panel-card">
-              <div class="panel-header">
-                <h3><i class="fas fa-calculator" style="color:#6366f1;"></i> AI Engine Guardrails</h3>
-                <span class="badge badge-success">Deterministic Truth Active</span>
-              </div>
-              <div class="guardrail-list">
-                <div class="guardrail-item">
-                  <div class="guardrail-icon"><i class="fas fa-check-circle"></i></div>
-                  <div>
-                    <strong>Zero Pricing Hallucination</strong>
-                    <p>AI queries SQLite database for approved rates; prompt does not hardcode rates.</p>
-                  </div>
-                </div>
-                <div class="guardrail-item">
-                  <div class="guardrail-icon"><i class="fas fa-check-circle"></i></div>
-                  <div>
-                    <strong>5% Max Autonomous Discount</strong>
-                    <p>AI can grant up to 5% instantly. Any higher discount routes to Owner Approval.</p>
-                  </div>
-                </div>
-                <div class="guardrail-item">
-                  <div class="guardrail-icon"><i class="fas fa-check-circle"></i></div>
-                  <div>
-                    <strong>Deterministic Math Engine</strong>
-                    <p>Computes 5% skirt overlap and 8% roof sag camber via verified algorithms.</p>
-                  </div>
-                </div>
-                <div class="guardrail-item">
-                  <div class="guardrail-icon"><i class="fas fa-check-circle"></i></div>
-                  <div>
-                    <strong>Multi-Brand Segregation</strong>
-                    <p>NetsOcean quotes sports nets; GCM Safety Nets quotes balcony/bird solutions.</p>
-                  </div>
-                </div>
-              </div>
+            <div class="stat-details">
+              <p>WhatsApp Conversations</p>
+              <h3 id="stat-wa-chats">0</h3>
+              <span>🟢 Cloud API Active (+91 99123 99334)</span>
             </div>
           </div>
-        </section>
 
-        <!-- 2. LEADS TAB -->
-                <!-- 2. LEADS & 3-PILLAR CRM TAB -->
-        <section id="tab-leads" class="tab-panel">
-          <div class="panel-card">
-            <div class="panel-header" style="flex-wrap: wrap; gap: 12px; border-bottom: none; padding-bottom: 0;">
-              <div>
-                <h3 style="display:flex; align-items:center; gap:8px; font-size:1.25rem;">
-                  <i class="fas fa-layer-group" style="color:var(--primary);"></i> 
-                  GCM 3-Pillar Enterprise CRM
-                </h3>
-                <p style="color:var(--text-secondary); font-size:0.85rem; margin-top:4px;">
-                  Unified operations console for Turnkey Sports Infrastructure, Doorstep Van Fleet, and Netting Supply Logistics.
-                </p>
-              </div>
-              <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                <button class="btn btn-outline btn-sm" onclick="loadPillarLeads()"><i class="fas fa-sync-alt"></i> Refresh</button>
-                <button class="btn btn-primary btn-sm" onclick="openQuickCallModal()" style="background:linear-gradient(135deg, #10b981 0%, #059669 100%); border-color:#059669; font-weight:700; box-shadow:0 0 15px rgba(16,185,129,0.3);"><i class="fas fa-phone-volume"></i> + Quick Call (AI Handoff)</button>
-                <button class="btn btn-outline btn-sm" onclick="openNewLeadModal()"><i class="fas fa-plus"></i> New Inquiry</button>
-              </div>
+          <div class="stat-card" style="--stat-color:var(--accent-amber);">
+            <div class="stat-icon" style="color:var(--accent-amber);">
+              <i class="fas fa-file-invoice-dollar"></i>
             </div>
-
-            <!-- Pillar Navigation Bar -->
-            <div class="pillar-nav-wrapper">
-              <button class="pillar-pill active" id="pill-btn-all" onclick="selectPillar('all')">
-                <i class="fas fa-globe"></i> All Leads <span class="pill-count" id="count-all">0</span>
-              </button>
-              <button class="pillar-pill" id="pill-btn-turnkey" onclick="selectPillar('turnkey')">
-                <i class="fas fa-baseball-bat-ball" style="color:#6366f1;"></i> 1. Turnkey Sports (gcm.enterprises) <span class="pill-count" id="count-turnkey">0</span>
-              </button>
-              <button class="pillar-pill" id="pill-btn-doorstep_service" onclick="selectPillar('doorstep_service')">
-                <i class="fas fa-van-shuttle" style="color:#3b82f6;"></i> 2. Doorstep Vans & Installation (gcmsafetynets.in) <span class="pill-count" id="count-doorstep">0</span>
-              </button>
-              <button class="pillar-pill" id="pill-btn-supply_only" onclick="selectPillar('supply_only')">
-                <i class="fas fa-boxes-packing" style="color:#10b981;"></i> 3. Netting Supply & Dispatch (netsocean.com) <span class="pill-count" id="count-supply">0</span>
-              </button>
-              <button class="pillar-pill" id="pill-btn-owner_desk" onclick="selectPillar('owner_desk')">
-                <i class="fas fa-shield-halved" style="color:#ef4444;"></i> 🚨 Owner Attention Desk <span class="pill-count badge-danger" id="count-owner">0</span>
-              </button>
-            </div>
-
-            <!-- 🚨 Missing WhatsApp Red Alert Banner Container -->
-            <div id="no-whatsapp-alert-container" style="display:none; margin: 16px 0 8px 0;"></div>
-
-            <!-- Real-Time Metrics Strip -->
-            <div class="crm-metrics-strip">
-              <div class="crm-mini-metric">
-                <span class="label">Total Pipeline Value</span>
-                <strong id="crm-stat-pipeline">₹0</strong>
-              </div>
-              <div class="crm-mini-metric">
-                <span class="label">Advance Collected</span>
-                <strong id="crm-stat-advance" style="color:#10b981;">₹0</strong>
-              </div>
-              <div class="crm-mini-metric">
-                <span class="label">Pending Balance Due</span>
-                <strong id="crm-stat-balance" style="color:#f59e0b;">₹0</strong>
-              </div>
-              <div class="crm-mini-metric">
-                <span class="label">Doorstep Visits Scheduled</span>
-                <strong id="crm-stat-visits" style="color:#3b82f6;">0</strong>
-              </div>
-            </div>
-
-            <!-- Search & Filter Controls -->
-            <div class="crm-filter-bar">
-              <div class="search-box">
-                <i class="fas fa-search"></i>
-                <input type="text" id="crm-search-input" placeholder="Search Customer Name, Phone, Locality, or Project..." oninput="debounceSearch()">
-              </div>
-              <div class="filter-controls" style="display:flex;gap:8px;flex-wrap:wrap;">
-                <select id="crm-brand-filter" onchange="loadPillarLeads()" style="background:#0f172a;color:#f8fafc;border:1px solid #334155;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;">
-                  <option value="all">🏢 All 9 Platforms / Brands</option>
-                  <option value="gcmsafetynets">Hyderabad: GCM Safety Nets</option>
-                  <option value="gcmnetting">Bangalore: GCM Netting</option>
-                  <option value="gcmnettingsolutions">Chennai: GCM Netting Solutions</option>
-                  <option value="gcm-enterprises">Pan-India: GCM Enterprises (Turnkey)</option>
-                  <option value="gcminvisiblegrills">Invisible Grills: gcminvisiblegrills.com</option>
-                  <option value="netsdial">Directory: netsdial.com</option>
-                  <option value="ushaleads">Lead Engine: ushaleads.in</option>
-                  <option value="russea">Branded: russea.in</option>
-                  <option value="netsocean">Wholesale: netsocean.com</option>
-                </select>
-                <select id="crm-city-filter" onchange="loadPillarLeads()" style="background:#0f172a;color:#f8fafc;border:1px solid #334155;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;">
-                  <option value="all">📍 All Cities / Regions</option>
-                  <option value="Bangalore">Bangalore / Bengaluru</option>
-                  <option value="Chennai">Chennai & Tambaram</option>
-                  <option value="Hyderabad">Hyderabad & Secunderabad</option>
-                  <option value="Pan-India">Pan-India / Turnkey</option>
-                </select>
-                <select id="crm-stage-filter" onchange="loadPillarLeads()" style="background:#0f172a;color:#f8fafc;border:1px solid #334155;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;">
-                  <option value="all">📊 All Stages</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- Leads Data Table -->
-            <div class="table-responsive" style="margin-top: 12px;">
-              <table class="data-table crm-table">
-                <thead>
-                  <tr>
-                    <th>Customer & Contact</th>
-                    <th>Pillar / Brand</th>
-                    <th>Requirement & Scope</th>
-                    <th>Pipeline Stage</th>
-                    <th>Operations (Van / Specs / Bilty)</th>
-                    <th>Commercials & Payment</th>
-                    <th>1-Click Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="all-leads-tbody">
-                  <tr><td colspan="7" class="text-center" style="padding:40px;"><i class="fas fa-spinner fa-spin"></i> Loading GCM Enterprise CRM...</td></tr>
-                </tbody>
-              </table>
+            <div class="stat-details">
+              <p>Active Quotations</p>
+              <h3 id="stat-active-quotes">0</h3>
+              <span>📄 With SBI & UPI Details</span>
             </div>
           </div>
-        </section>
 
-        <!-- 2B. ESTIMATIONS & ERP TAB -->
-        <section id="tab-quotations" class="tab-panel">
-          <div class="panel-card">
-            <div class="panel-header">
-              <div>
-                <h3>Estimations, Quotations & GCM ERP</h3>
-                <p style="color:#64748b;font-size:0.85rem;margin-top:4px;">
-                  All quotations generated by Chat GCM AI Brain are synchronized with the GCM Enterprises ERP engine.
-                </p>
-              </div>
-              <div class="filter-group">
-                <a href="https://gcm.enterprises/admin/documents.php" target="_blank" class="btn btn-outline" style="font-size:0.82rem;">
-                  <i class="fas fa-file-invoice me-1"></i> Open GCM ERP Documents
-                </a>
-                <a href="https://gcm.enterprises/admin/create.php" target="_blank" class="btn btn-primary" style="font-size:0.82rem;">
-                  <i class="fas fa-plus me-1"></i> New Manual Invoice / Estimate
-                </a>
-              </div>
+          <div class="stat-card" style="--stat-color:#ec4899;">
+            <div class="stat-icon" style="color:#ec4899;">
+              <i class="fas fa-truck-ramp-box"></i>
             </div>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Quote Number</th>
-                    <th>Official ERP Document</th>
-                    <th>Customer Name</th>
-                    <th>Phone / City</th>
-                    <th>Project</th>
-                    <th>Subtotal</th>
-                    <th>Grand Total</th>
-                    <th>Status</th>
-                    <th>ERP Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="all-quotations-tbody">
-                  <tr><td colspan="9" class="text-center">Loading quotations...</td></tr>
-                </tbody>
-              </table>
+            <div class="stat-details">
+              <p>Dispatched & In-Transit</p>
+              <h3 id="stat-dispatched-count">0</h3>
+              <span>🚚 48-Hr Auto Check-In</span>
             </div>
           </div>
-        </section>
+        </div>
 
-        <!-- 3. APPROVALS TAB -->
-        <section id="tab-approvals" class="tab-panel">
-          <div class="panel-card">
-            <div class="panel-header">
-              <h3>⚠️ Pending Owner Approvals</h3>
-              <small>Review discount requests exceeding autonomous AI threshold (5%)</small>
-            </div>
-            <div id="approvals-container">
-              <p class="text-center" style="padding: 40px;">No pending approvals.</p>
-            </div>
-          </div>
-        </section>
-
-        <!-- 4. AI TEST SANDBOX TAB -->
-        <section id="tab-sandbox" class="tab-panel">
-          <div class="sandbox-container">
-            <div class="sandbox-config panel-card">
-              <h3>Simulation Settings</h3>
-              <div class="form-group">
-                <label>Simulate Website Context:</label>
-                <select id="sandbox-website">
-                  <option value="netsocean">NetsOcean (Cricket & Sports Nets)</option>
-                  <option value="gcmsafetynets">GCM Safety Nets (Balcony & Bird Nets)</option>
-                  <option value="gcm-enterprises">GCM Enterprises (Turnkey Projects)</option>
-                  <option value="gcminvisiblegrills">GCM Invisible Grills (SS 316)</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Customer Name:</label>
-                <input type="text" id="sandbox-name" value="Sunil Sharma">
-              </div>
-              <div class="form-group">
-                <label>Phone:</label>
-                <input type="tel" id="sandbox-phone" value="9876543210">
-              </div>
-              <div class="sandbox-shortcuts">
-                <label>Quick Test Scenarios:</label>
-                <button class="btn btn-sm btn-outline" onclick="setSandboxText('I need a cricket net for 100 x 50 x 25 feet court')">📐 100x50x25 Cricket Net</button>
-                <button class="btn btn-sm btn-outline" onclick="setSandboxText('Give me turnkey box cricket estimate for 100 x 50 ground')">🏗️ Turnkey Box Cricket BOQ</button>
-                <button class="btn btn-sm btn-outline" onclick="setSandboxText('Can you give 12% discount on this quote?')">⚠️ Test 12% Discount Guardrail</button>
-                <button class="btn btn-sm btn-outline" onclick="setSandboxText('Generate official quotation for my academy')">📋 Generate Quotation</button>
-              </div>
-            </div>
-
-            <div class="sandbox-chat panel-card">
-              <div class="panel-header">
-                <h3>Live AI Conversation</h3>
-                <button class="btn btn-xs btn-outline" onclick="clearSandboxChat()">Clear Chat</button>
-              </div>
-              <div class="sandbox-messages" id="sandbox-chat-history">
-                <div class="chat-bubble assistant">
-                  Hello Sunil! I am the GCM AI Sales Brain. How can I assist you with your netting or turnkey sports setup today?
-                </div>
-              </div>
-              <form class="sandbox-input-row" id="sandbox-chat-form" onsubmit="sendSandboxMessage(event)">
-                <input type="text" id="sandbox-input" placeholder="Type a message or click a test scenario above..." autocomplete="off">
-                <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Send</button>
-              </form>
-            </div>
-          </div>
-        </section>
-
-        <!-- 5. PRODUCTS & PRICING TAB -->
-        <section id="tab-products" class="tab-panel">
-          <div class="panel-card">
-            <div class="panel-header">
-              <h3>Master Products & Approved Pricing Matrix</h3>
-              <span class="badge badge-primary">Single Source of Truth</span>
-            </div>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Product SKU</th>
-                    <th>Brand</th>
-                    <th>Category</th>
-                    <th>Product Name</th>
-                    <th>Material & Thickness</th>
-                    <th>Unit</th>
-                    <th>Warranty</th>
-                  </tr>
-                </thead>
-                <tbody id="products-tbody">
-                  <tr><td colspan="7" class="text-center">Loading products...</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- 6. INTEGRATION / EMBED TAB -->
-        <section id="tab-integration" class="tab-panel">
-          <div class="panel-card">
-            <div class="panel-header">
-              <h3>Embed Chat GCM on Any Website</h3>
-            </div>
-            <p style="color:#64748b; margin-bottom: 20px;">
-              You do not need to rewrite your websites. Simply paste this 1-line script tag before the closing <code>&lt;/body&gt;</code> tag on any of your websites:
-            </p>
-
-            <div class="code-block">
-              <code>&lt;!-- Chat GCM Embeddable Widget --&gt;
-&lt;script src="https://chatgcm.in/widget/chat-gcm-widget.js" data-website-id="netsocean"&gt;&lt;/script&gt;</code>
-            </div>
-
-            <h4 style="margin: 25px 0 10px;">Brand Configuration Options:</h4>
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Website Brand</th>
-                    <th><code>data-website-id</code></th>
-                    <th>Target Categories</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><strong>NetsOcean Sports Nets</strong></td>
-                    <td><code>netsocean</code></td>
-                    <td>Cricket Nets, Sports Nets, Box Cricket Nets, Artificial Turf</td>
-                  </tr>
-                  <tr>
-                    <td><strong>GCM Safety Nets</strong></td>
-                    <td><code>gcmsafetynets</code></td>
-                    <td>Balcony Nets, Pigeon Nets, Invisible Grills, Cloth Hangers</td>
-                  </tr>
-                  <tr>
-                    <td><strong>GCM Enterprises</strong></td>
-                    <td><code>gcm-enterprises</code></td>
-                    <td>Pan-India Turnkey Box Cricket, Industrial & Sports Netting</td>
-                  </tr>
-                  <tr>
-                    <td><strong>GCM Invisible Grills</strong></td>
-                    <td><code>gcminvisiblegrills</code></td>
-                    <td>High-Tensile SS 316 Invisible Grills</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- 8. WhatsApp Automation Tab -->
-        <section id="tab-whatsapp" class="tab-panel">
-          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-            <!-- Status Card -->
-            <div class="panel-card" style="margin-bottom:0;">
-              <div class="panel-header">
-                <h3><i class="fab fa-whatsapp" style="color:#22c55e;"></i> Meta Webhook Configuration</h3>
-                <span class="badge" id="wa-status-badge" style="background:#fef3c7; color:#b45309;">Checking...</span>
-              </div>
-              <p style="color:#64748b; font-size: 13px; margin-bottom: 15px;">
-                Enter these exact credentials in your <strong>Meta Developer Dashboard</strong> under WhatsApp &rarr; Configuration:
-              </p>
-              
-              <div style="margin-bottom:15px;">
-                <label style="font-size:12px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Callback URL (Webhook)</label>
-                <div style="display:flex; gap:8px;">
-                  <input type="text" id="wa-webhook-url" readonly value="https://chatgcm.in/api/whatsapp/webhook" style="flex:1; padding:8px 12px; border:1px solid #cbd5e1; border-radius:8px; font-family:monospace; font-size:12px; background:#f8fafc;">
-                  <button class="btn btn-outline btn-sm" onclick="navigator.clipboard.writeText('https://chatgcm.in/api/whatsapp/webhook'); alert('Webhook URL Copied!');">Copy</button>
-                </div>
-              </div>
-
-              <div style="margin-bottom:15px;">
-                <label style="font-size:12px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Verify Token</label>
-                <div style="display:flex; gap:8px;">
-                  <input type="text" id="wa-verify-token" readonly value="gcm_whatsapp_verify_2026" style="flex:1; padding:8px 12px; border:1px solid #cbd5e1; border-radius:8px; font-family:monospace; font-size:12px; background:#f8fafc;">
-                  <button class="btn btn-outline btn-sm" onclick="navigator.clipboard.writeText('gcm_whatsapp_verify_2026'); alert('Verify Token Copied!');">Copy</button>
-                </div>
-              </div>
-
-              <div>
-                <label style="font-size:12px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Webhook Subscription Field</label>
-                <span style="display:inline-block; background:#e0f2fe; color:#0369a1; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600;">messages</span>
-              </div>
-            </div>
-
-            <!-- Live Test Messenger -->
-            <div class="panel-card" style="margin-bottom:0;">
-              <div class="panel-header">
-                <h3><i class="fas fa-paper-plane" style="color:#2563eb;"></i> Live WhatsApp Messenger</h3>
-              </div>
-              <p style="color:#64748b; font-size: 13px; margin-bottom: 15px;">
-                Test sending a live message from your WhatsApp Business Number to any customer phone:
-              </p>
-
-              <form id="wa-test-form" onsubmit="event.preventDefault(); sendTestWhatsApp();">
-                <div style="margin-bottom:12px;">
-                  <label style="font-size:12px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Recipient Phone Number</label>
-                  <input type="text" id="wa-test-phone" placeholder="e.g. 919912399224 or 9912399224" required style="width:100%; padding:9px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:13px; box-sizing:border-box;">
-                </div>
-
-                <div style="margin-bottom:15px;">
-                  <label style="font-size:12px; font-weight:700; color:#475569; display:block; margin-bottom:4px;">Message Text</label>
-                  <textarea id="wa-test-message" rows="3" style="width:100%; padding:9px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:13px; box-sizing:border-box;" required>Hello from GCM AI Sales Brain! Your quotation for 100x50 cricket net is ready: https://gcm.enterprises/admin/view.php?id=EST-202609-049</textarea>
-                </div>
-
-                <button type="submit" class="btn btn-primary" id="wa-send-btn" style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px;">
-                  <i class="fab fa-whatsapp"></i> Send WhatsApp Test
+        <!-- ====================================================================
+             TAB 1: LIVE 2-WAY WHATSAPP CONVERSATION HUB
+             ==================================================================== -->
+        <div id="tab-whatsapp-hub" class="tab-panel active">
+          <div class="wa-hub-layout">
+            <!-- Left: Threads List -->
+            <div class="wa-threads-sidebar">
+              <div class="wa-threads-header">
+                <h3><i class="fab fa-whatsapp" style="color:var(--accent-green);"></i> Active Chats</h3>
+                <button class="btn btn-outline btn-sm" onclick="loadWhatsAppConversations()" title="Refresh conversations">
+                  <i class="fas fa-sync-alt"></i>
                 </button>
-                <div id="wa-test-result" style="margin-top:10px; font-size:12px; display:none;"></div>
-              </form>
+              </div>
+              <div class="wa-search-box">
+                <input type="text" id="wa-search-input" placeholder="Search phone or customer..." oninput="filterWhatsAppThreads()">
+              </div>
+              <div class="wa-threads-list" id="wa-threads-list">
+                <!-- Dynamically rendered threads -->
+              </div>
+            </div>
+
+            <!-- Right: Active Chat Window -->
+            <div class="wa-chat-window">
+              <div class="wa-chat-header" id="wa-chat-header">
+                <div class="wa-chat-user">
+                  <div class="wa-avatar" id="active-chat-avatar">G</div>
+                  <div>
+                    <h4 id="active-chat-name">Select a conversation</h4>
+                    <p id="active-chat-phone">+91 ----------</p>
+                  </div>
+                </div>
+                <div class="wa-chat-actions" id="active-chat-actions" style="display:none;">
+                  <button class="btn btn-outline btn-sm" id="btn-call-customer" onclick="callActiveCustomer()">
+                    <i class="fas fa-phone"></i> Call
+                  </button>
+                  <button class="btn btn-green btn-sm" onclick="quickSendQuoteToActiveChat()">
+                    <i class="fas fa-file-invoice"></i> Send Quote
+                  </button>
+                  <button class="btn btn-amber btn-sm" id="btn-toggle-autopilot" onclick="toggleAutoPilot()">
+                    <i class="fas fa-robot"></i> AI Auto-Pilot: ON
+                  </button>
+                </div>
+              </div>
+
+              <!-- Message Stream -->
+              <div class="wa-messages-container" id="wa-messages-stream">
+                <div style="text-align:center; padding: 40px; color:var(--text-muted);">
+                  <i class="fab fa-whatsapp" style="font-size: 40px; color:var(--accent-green); margin-bottom: 12px; display:block;"></i>
+                  Select a customer thread from the left to view live WhatsApp messages.
+                </div>
+              </div>
+
+              <!-- Quick Action Chips -->
+              <div class="wa-quick-chips" id="wa-quick-chips" style="display:none;">
+                <button class="wa-chip" onclick="sendQuickReply('Namaste! Thank you for reaching out to GCM Enterprises. Could you please share your balcony dimensions (length x height in feet)?')">
+                  <i class="fas fa-ruler-combined"></i> Ask Dimensions
+                </button>
+                <button class="wa-chip" onclick="sendQuickReply('Could you please take a photo of your balcony or window and send it here so our engineer can inspect it?')">
+                  <i class="fas fa-camera"></i> Request Photo
+                </button>
+                <button class="wa-chip" onclick="sendQuickReply('Our official company payment details:\nBank: State Bank of India\nA/C: 44979437825\nIFSC: SBIN0021462\nUPI: 9912399224@sbi\nPlease share UTR screenshot once paid.')">
+                  <i class="fas fa-university"></i> Send SBI & UPI Details
+                </button>
+                <button class="wa-chip" onclick="sendQuickReply('I am Managing Director Gopichand. I am available to talk directly at +91 99123 99224.')">
+                  <i class="fas fa-user-tie"></i> Owner Call Note
+                </button>
+              </div>
+
+              <!-- Composer Bar -->
+              <div class="wa-composer-area" id="wa-composer-area" style="display:none;">
+                <input type="text" id="wa-message-input" class="wa-composer-input" placeholder="Type WhatsApp reply to customer... (Press Enter to send)" onkeypress="if(event.key==='Enter') sendManualWhatsAppReply()">
+                <button class="wa-send-btn" onclick="sendManualWhatsAppReply()" title="Send WhatsApp Message">
+                  <i class="fas fa-paper-plane"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ====================================================================
+             TAB 2: VISUAL 5-STAGE KANBAN PIPELINE BOARD
+             ==================================================================== -->
+        <div id="tab-kanban" class="tab-panel">
+          <div class="kanban-view-header">
+            <div>
+              <h3 style="font-size:18px; font-weight:800; color:#fff;">Omnichannel Lead Pipeline</h3>
+              <p style="font-size:12.5px; color:var(--text-secondary);">Interactive stage tracking from initial inquiry to final delivered installation</p>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-outline btn-sm" onclick="renderKanbanBoard()">
+                <i class="fas fa-sync-alt"></i> Refresh Board
+              </button>
             </div>
           </div>
 
-          <!-- Autonomous Follow-up Engine Overview -->
-          <div class="panel-card">
-            <div class="panel-header">
-              <h3><i class="fas fa-robot" style="color:#6366f1;"></i> Autonomous Follow-Up Loop Engine</h3>
-              <span class="badge badge-success">Active Scheduler (Every 15m)</span>
+          <div class="kanban-board">
+            <!-- Column 1: New Inbound -->
+            <div class="kanban-column" id="col-new">
+              <div class="kanban-col-header">
+                <div class="kanban-col-title">
+                  <span class="status-pill new">📥 Inbound</span>
+                </div>
+                <span class="kanban-col-badge" id="count-kanban-new">0</span>
+              </div>
+              <div class="kanban-cards-list" id="cards-kanban-new"></div>
             </div>
-            <p style="color:#64748b; font-size: 13.5px; margin-bottom: 18px;">
-              The AI Sales Brain runs continuous background timers. When a customer receives an estimate or asks a question, the AI automatically follows up without you or your staff lifting a finger:
-            </p>
 
-            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px;">
-              <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px;">
-                <div style="font-weight:700; font-size:13px; color:#1e293b; margin-bottom:6px;">⏱️ Cycle 1: 2 Hours Later</div>
-                <p style="font-size:12px; color:#64748b; margin:0; line-height:1.5;">
-                  Checks if the customer reviewed their formal quotation. Asks if they need adjustments in mesh size (40mm vs 50mm) or dimensions.
-                </p>
+            <!-- Column 2: AI Engaging -->
+            <div class="kanban-column" id="col-engaging">
+              <div class="kanban-col-header">
+                <div class="kanban-col-title">
+                  <span class="status-pill followup">💬 AI Follow-up</span>
+                </div>
+                <span class="kanban-col-badge" id="count-kanban-engaging">0</span>
               </div>
+              <div class="kanban-cards-list" id="cards-kanban-engaging"></div>
+            </div>
 
-              <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px;">
-                <div style="font-weight:700; font-size:13px; color:#1e293b; margin-bottom:6px;">📦 Cycle 2: 24 Hours Later</div>
-                <p style="font-size:12px; color:#64748b; margin:0; line-height:1.5;">
-                  Checks Hyderabad warehouse inventory and offers immediate 4 PM dispatch if confirmed today, creating natural purchase urgency.
-                </p>
+            <!-- Column 3: Quotation Sent -->
+            <div class="kanban-column" id="col-quoted">
+              <div class="kanban-col-header">
+                <div class="kanban-col-title">
+                  <span class="status-pill quoted">📄 Quotation Sent</span>
+                </div>
+                <span class="kanban-col-badge" id="count-kanban-quoted">0</span>
               </div>
+              <div class="kanban-cards-list" id="cards-kanban-quoted"></div>
+            </div>
 
-              <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px;">
-                <div style="font-weight:700; font-size:13px; color:#1e293b; margin-bottom:6px;">💳 Cycle 3: Instant Payment</div>
-                <p style="font-size:12px; color:#64748b; margin:0; line-height:1.5;">
-                  When customer says "finalize", sends Razorpay/UPI payment link. On payment received, marks ERP invoice as PAID and alerts dispatch!
-                </p>
+            <!-- Column 4: Payment Confirmed -->
+            <div class="kanban-column" id="col-paid">
+              <div class="kanban-col-header">
+                <div class="kanban-col-title">
+                  <span class="status-pill paid">💳 Payment Done</span>
+                </div>
+                <span class="kanban-col-badge" id="count-kanban-paid">0</span>
               </div>
+              <div class="kanban-cards-list" id="cards-kanban-paid"></div>
+            </div>
+
+            <!-- Column 5: Dispatched & In-Transit -->
+            <div class="kanban-column" id="col-dispatched">
+              <div class="kanban-col-header">
+                <div class="kanban-col-title">
+                  <span class="status-pill dispatched">🚚 Dispatched / Bilty</span>
+                </div>
+                <span class="kanban-col-badge" id="count-kanban-dispatched">0</span>
+              </div>
+              <div class="kanban-cards-list" id="cards-kanban-dispatched"></div>
             </div>
           </div>
-        </section>
+        </div>
+
+        <!-- ====================================================================
+             TAB 3: HOT LEADS CRM (DENSE TABLE VIEW)
+             ==================================================================== -->
+        <div id="tab-leads" class="tab-panel">
+          <div class="table-card">
+            <div class="table-header-bar">
+              <div>
+                <h3>All Inbound Leads & Customer Roster</h3>
+                <p style="font-size:12px; color:var(--text-secondary);">Filtered across all channels (Web, Phone Call, WhatsApp, UshaLeads)</p>
+              </div>
+              <div style="display:flex; gap:10px;">
+                <input type="text" id="leads-filter-input" class="form-control" placeholder="Search customer, phone, city..." style="width:240px; padding:6px 12px; font-size:12px;" oninput="filterLeadsTable()">
+                <button class="btn btn-green btn-sm" onclick="openQuickCallModal()">
+                  <i class="fas fa-plus"></i> Add Lead
+                </button>
+              </div>
+            </div>
+            <div style="overflow-x:auto;">
+              <table class="custom-table" id="leads-master-table">
+                <thead>
+                  <tr>
+                    <th>Channel & Source</th>
+                    <th>Customer Name & City</th>
+                    <th>Phone / WhatsApp</th>
+                    <th>Requirement Summary</th>
+                    <th>Est. Value</th>
+                    <th>Current Stage</th>
+                    <th>Quick Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="leads-table-body">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ====================================================================
+             TAB 4: ESTIMATIONS & ERP
+             ==================================================================== -->
+        <div id="tab-quotations" class="tab-panel">
+          <div class="table-card">
+            <div class="table-header-bar">
+              <div>
+                <h3>Turnkey Quotations & Official Estimations</h3>
+                <p style="font-size:12px; color:var(--text-secondary);">Includes SBI Bank A/C 44979437825 and UPI 9912399224@sbi</p>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="openQuotationModal()">
+                <i class="fas fa-file-invoice"></i> + Generate Quotation
+              </button>
+            </div>
+            <div style="overflow-x:auto;">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th>Quote #</th>
+                    <th>Client Name</th>
+                    <th>Pillar / Category</th>
+                    <th>Grand Total</th>
+                    <th>Advance Paid</th>
+                    <th>Status</th>
+                    <th>Official PDF Link</th>
+                  </tr>
+                </thead>
+                <tbody id="quotations-table-body">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ====================================================================
+             TAB 5: LOGISTICS & BILTY TRACKER
+             ==================================================================== -->
+        <div id="tab-logistics" class="tab-panel">
+          <div class="table-card">
+            <div class="table-header-bar">
+              <div>
+                <h3>Logistics, Transporter & Bilty Docket Tracker</h3>
+                <p style="font-size:12px; color:var(--text-secondary);">Consignments in-transit with automated 48-hour delivery follow-up</p>
+              </div>
+            </div>
+            <div style="overflow-x:auto;">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th>Client & Phone</th>
+                    <th>Transporter</th>
+                    <th>LR / Bilty Docket #</th>
+                    <th>Parcels</th>
+                    <th>Dispatch Date</th>
+                    <th>48-Hr Follow-Up Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="logistics-table-body">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ====================================================================
+             TAB 6: 9 WEBSITES SYNC & HEALTH
+             ==================================================================== -->
+        <div id="tab-websites" class="tab-panel">
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;" id="websites-grid">
+            <!-- Dynamically populated with 9 website cards -->
+          </div>
+        </div>
+
+        <!-- ====================================================================
+             TAB 7: OWNER APPROVALS
+             ==================================================================== -->
+        <div id="tab-approvals" class="tab-panel">
+          <div class="table-card">
+            <div class="table-header-bar">
+              <h3>High-Value & Negotiation Exceptions (> 4% Discount)</h3>
+            </div>
+            <div style="padding:30px; text-align:center; color:var(--text-muted);" id="approvals-container">
+              <i class="fas fa-check-circle" style="font-size:36px; color:var(--accent-green); margin-bottom:10px; display:block;"></i>
+              Zero pending approvals. AI is operating within autonomous parameters (maximum 4% discount).
+            </div>
+          </div>
+        </div>
+
+        <!-- ====================================================================
+             TAB 8: AGENT AUDIT & REGIONAL KPIS (RUSSEA™ DEFENSE & SALES PERFORMANCE)
+             ==================================================================== -->
+        <div id="tab-agent-audit" class="tab-panel">
+          <!-- Top KPI Metrics Cards -->
+          <div class="stats-grid" style="margin-bottom: 24px;">
+            <div class="stat-card">
+              <div class="stat-header">
+                <span class="stat-label">Total Agent Actions</span>
+                <i class="fas fa-bolt stat-icon" style="color:var(--accent-indigo);"></i>
+              </div>
+              <div class="stat-value" id="kpi-agent-actions">0</div>
+              <div class="stat-subtext">Logged across 6 regional personas</div>
+            </div>
+
+            <div class="stat-card" style="border-left: 3px solid #10b981;">
+              <div class="stat-header">
+                <span class="stat-label">RUSSEA™ Brand Defenses</span>
+                <i class="fas fa-shield-alt stat-icon" style="color:#10b981;"></i>
+              </div>
+              <div class="stat-value" id="kpi-russea-defenses" style="color:#10b981;">0</div>
+              <div class="stat-subtext">Competitors countered (Garware, Tuff, etc.)</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-header">
+                <span class="stat-label">Formal Quotations Issued</span>
+                <i class="fas fa-file-invoice-dollar stat-icon" style="color:var(--accent-amber);"></i>
+              </div>
+              <div class="stat-value" id="kpi-quotes-issued">0</div>
+              <div class="stat-subtext">Sequential corporate quotes sent</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-header">
+                <span class="stat-label">Callbacks & Site Visits</span>
+                <i class="fas fa-calendar-check stat-icon" style="color:var(--accent-cyan);"></i>
+              </div>
+              <div class="stat-value" id="kpi-callbacks-scheduled">0</div>
+              <div class="stat-subtext">Measurement & booking requests</div>
+            </div>
+          </div>
+
+          <!-- Regional Sales Persona Cards Grid -->
+          <div style="margin-bottom: 24px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+              <h3 style="font-size:16px; font-weight:700; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+                <i class="fas fa-users" style="color:#10b981;"></i> Active Regional Personas (100% Human Identification)
+              </h3>
+              <span style="font-size:12px; color:var(--text-muted);">Never discloses AI brain &bull; Autonomous 4% discount guardrail</span>
+            </div>
+            <div id="agent-personas-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px;">
+              <!-- Populated dynamically via JS -->
+            </div>
+          </div>
+
+          <!-- Chronological Audit Trail Table -->
+          <div class="table-card">
+            <div class="table-header-bar" style="flex-wrap: wrap; gap: 12px;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <h3 style="font-size:15px; font-weight:700; color:var(--text-primary);">
+                  <i class="fas fa-history" style="color:var(--accent-cyan); margin-right:6px;"></i> Live Chronological Audit Trail
+                </h3>
+                <span class="badge badge-green" id="agent-logs-count">0 logged</span>
+              </div>
+              <div style="display:flex; gap:10px; align-items:center;">
+                <select id="filter-agent-persona" class="form-control" style="width: auto; padding: 6px 12px; font-size: 12px;" onchange="applyAgentAuditFilters()">
+                  <option value="">All Personas</option>
+                  <option value="Venkatesh">Venkatesh (Hyderabad)</option>
+                  <option value="Suresh Reddy">Suresh Reddy (AP / Vizag)</option>
+                  <option value="Chethan Kumar">Chethan Kumar (Bengaluru)</option>
+                  <option value="Karthik">Karthik (Chennai)</option>
+                  <option value="Rahul Kulkarni">Rahul Kulkarni (Mumbai / Pune)</option>
+                  <option value="Rohit Sharma">Rohit Sharma (Delhi NCR)</option>
+                </select>
+                <select id="filter-agent-action" class="form-control" style="width: auto; padding: 6px 12px; font-size: 12px;" onchange="applyAgentAuditFilters()">
+                  <option value="">All Actions</option>
+                  <option value="COMPETITOR_DEFENSE_RUSSEA">🛡️ RUSSEA™ Brand Defense</option>
+                  <option value="QUOTATION_GENERATED">📄 Quotation Generated</option>
+                  <option value="ESTIMATE_CALCULATED">📐 Estimate Calculated</option>
+                  <option value="CALLBACK_SCHEDULED">📞 Callback Scheduled</option>
+                  <option value="SITE_VISIT_BOOKED">📍 Site Visit Booked</option>
+                  <option value="DISCOUNT_APPLIED">🏷️ Discount Applied</option>
+                  <option value="INQUIRY_ANSWERED">💬 Inquiry Handled</option>
+                </select>
+                <button class="btn btn-outline btn-sm" onclick="loadAgentPerformance()">
+                  <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+              </div>
+            </div>
+
+            <div style="overflow-x:auto;">
+              <table class="custom-table" id="agent-logs-table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Persona</th>
+                    <th>Action</th>
+                    <th>Customer / Lead</th>
+                    <th>City / Channel</th>
+                    <th>Work Summary</th>
+                    <th>Inspect</th>
+                  </tr>
+                </thead>
+                <tbody id="agent-logs-tbody">
+                  <tr>
+                    <td colspan="7" style="text-align:center; padding:30px; color:var(--text-muted);">
+                      Loading agent audit logs...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   </div>
 
-  <script src="app.js"></script>
+  <!-- ====================================================================
+       MODALS
+       ==================================================================== -->
 
-  <!-- ================= OPERATIONAL MODALS ================= -->
-  <!-- 1. Assign Van / Field Technician Modal -->
-  <div id="modal-assign-van" class="modal-backdrop" style="display:none;">
-    <div class="modal-dialog">
+  <!-- Modal: Quick Call (Owner 30-Second Handoff) -->
+  <div id="modal-quick-call" class="modal-overlay hidden">
+    <div class="modal-container">
       <div class="modal-header">
-        <h3><i class="fas fa-van-shuttle" style="color:#3b82f6;"></i> Dispatch Doorstep Technician Van</h3>
-        <button class="btn-close" onclick="closeModal('modal-assign-van')">&times;</button>
+        <h3><i class="fas fa-phone-volume" style="color:var(--accent-green);"></i> Quick Call Handoff to AI</h3>
+        <button class="btn-outline btn-sm" onclick="closeModal('modal-quick-call')"><i class="fas fa-times"></i></button>
       </div>
       <div class="modal-body">
-        <input type="hidden" id="van-lead-id">
-        <div class="form-group">
-          <label>Customer Name & Location</label>
-          <input type="text" id="van-customer-info" readonly style="background:#0f172a; opacity:0.8;">
-        </div>
-        <div class="form-group">
-          <label>Select Field Technician & Van Fleet</label>
-          <select id="van-tech-select" class="form-control">
-            <option value="TECH-1" data-name="Raju Sharma (Senior Van Lead)" data-phone="+91 99123 99225">Raju Sharma — Van 1 (West Zone: Gachibowli/Kondapur/Miyapur)</option>
-            <option value="TECH-2" data-name="Suresh Kumar (Installation Tech)" data-phone="+91 99123 99226">Suresh Kumar — Van 2 (North Zone: Kukatpally/Nizampet/JNTU)</option>
-            <option value="TECH-3" data-name="Shiva Reddy (Field Supervisor)" data-phone="+91 99123 99228">Shiva Reddy — Van 3 (Central: Secunderabad/Begumpet/Jubilee Hills)</option>
-            <option value="TECH-4" data-name="Ramesh Goud (Invisible Grill Specialist)" data-phone="+91 99123 99229">Ramesh Goud — Van 4 (East: Uppal/Dilsukhnagar/LB Nagar)</option>
-          </select>
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-          <div class="form-group">
-            <label>Visit Date</label>
-            <input type="date" id="van-visit-date" class="form-control">
-          </div>
-          <div class="form-group">
-            <label>Time Slot</label>
-            <select id="van-visit-slot" class="form-control">
-              <option value="Morning (9:00 AM - 1:00 PM)">Morning (9:00 AM - 1:00 PM)</option>
-              <option value="Afternoon (1:00 PM - 5:00 PM)">Afternoon (1:00 PM - 5:00 PM)</option>
-              <option value="Evening (5:00 PM - 8:00 PM)">Evening (5:00 PM - 8:00 PM)</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Locality / Address Landmark</label>
-          <input type="text" id="van-locality" class="form-control" placeholder="e.g. My Home Bhooja, Block B, Floor 14">
-        </div>
-        <div style="margin-top:12px;">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-            <input type="checkbox" id="van-send-wa" checked> Send WhatsApp confirmation to Customer & Technician immediately
-          </label>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline" onclick="closeModal('modal-assign-van')">Cancel</button>
-        <button class="btn btn-primary" onclick="submitAssignVan()"><i class="fas fa-check"></i> Confirm & Schedule Van</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 2. Record Payment & Collections Modal -->
-  <div id="modal-record-payment" class="modal-backdrop" style="display:none;">
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h3><i class="fas fa-hand-holding-usd" style="color:#10b981;"></i> Record Payment Collection</h3>
-        <button class="btn-close" onclick="closeModal('modal-record-payment')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" id="pay-lead-id">
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
-          <div class="form-group">
-            <label>Total Estimate Value</label>
-            <input type="text" id="pay-total-val" readonly style="background:#0f172a; font-weight:700;">
-          </div>
-          <div class="form-group">
-            <label>Current Outstanding Balance</label>
-            <input type="text" id="pay-curr-balance" readonly style="background:#0f172a; font-weight:700; color:#f59e0b;">
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Payment Amount Received (₹)</label>
-          <input type="number" id="pay-amount" class="form-control" placeholder="e.g. 5000">
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-          <div class="form-group">
-            <label>Payment Mode</label>
-            <select id="pay-mode" class="form-control">
-              <option value="UPI">UPI (PhonePe / GPay / Paytm)</option>
-              <option value="CASH_TECHNICIAN">Cash Collected by Technician</option>
-              <option value="BANK_NEFT">Bank NEFT / RTGS / IMPS</option>
-              <option value="CHEQUE">Cheque</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Transaction UTR / Ref No.</label>
-            <input type="text" id="pay-ref" class="form-control" placeholder="UTR / Receipt #">
-          </div>
-        </div>
-        <div style="margin-top:12px;">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-            <input type="checkbox" id="pay-send-wa" checked> Send WhatsApp Payment Receipt & Thank You to Customer
-          </label>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline" onclick="closeModal('modal-record-payment')">Cancel</button>
-        <button class="btn btn-primary" onclick="submitPayment()"><i class="fas fa-save"></i> Save Payment & Update Ledger</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 3. Logistics & Bilty / LR Logging Modal -->
-  <div id="modal-record-dispatch" class="modal-backdrop" style="display:none;">
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h3><i class="fas fa-truck" style="color:#10b981;"></i> Log Freight Dispatch & Bilty (LR)</h3>
-        <button class="btn-close" onclick="closeModal('modal-record-dispatch')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" id="disp-lead-id">
-        <div class="form-group">
-          <label>Transport / Courier Partner</label>
-          <select id="disp-transporter" class="form-control">
-            <option value="V-Trans Logistics">V-Trans Logistics (Pan-India Heavy Cargo)</option>
-            <option value="Navata Road Transport">Navata Road Transport (AP/Telangana)</option>
-            <option value="Kranti Road Transport">Kranti Road Transport</option>
-            <option value="Safechem Logistics">Safechem Logistics</option>
-            <option value="DTDC Express">DTDC Express Courier</option>
-            <option value="The Professional Couriers">The Professional Couriers</option>
-            <option value="BMPS / Private Travels Bus">Private Travels Cargo (Same-Day Bus Service)</option>
-            <option value="Porter / Local Delivery">Porter / Local Mini Truck</option>
-          </select>
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-          <div class="form-group">
-            <label>LR / Bilty / Docket Number *</label>
-            <input type="text" id="disp-lr-number" class="form-control" placeholder="e.g. VT-HYD-98421">
-          </div>
-          <div class="form-group">
-            <label>Parcels / Bundles Count</label>
-            <input type="text" id="disp-parcels" class="form-control" placeholder="e.g. 2 Bundles (Netting + Accessories)">
-          </div>
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-          <div class="form-group">
-            <label>Dispatch Date</label>
-            <input type="date" id="disp-date" class="form-control">
-          </div>
-          <div class="form-group">
-            <label>Expected Arrival Date</label>
-            <input type="date" id="disp-expected-date" class="form-control">
-          </div>
-        </div>
-        <div style="margin-top:12px;">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-            <input type="checkbox" id="disp-send-wa" checked> Send WhatsApp Dispatch & LR Tracking Notification to Buyer
-          </label>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline" onclick="closeModal('modal-record-dispatch')">Cancel</button>
-        <button class="btn btn-primary" onclick="submitDispatch()"><i class="fas fa-paper-plane"></i> Save & WhatsApp Bilty</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 4. Lead Activities & History Modal -->
-  <div id="modal-lead-activities" class="modal-backdrop" style="display:none;">
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h3><i class="fas fa-history" style="color:var(--primary);"></i> Lead Audit Trail & Timeline</h3>
-        <button class="btn-close" onclick="closeModal('modal-lead-activities')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div id="activities-timeline" class="activity-timeline">
-          <div style="padding:20px; text-align:center; color:#64748b;">Loading activity log...</div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline" onclick="closeModal('modal-lead-activities')">Close</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 5. New Manual Lead Modal -->
-  <div id="modal-new-lead" class="modal-backdrop" style="display:none;">
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <h3><i class="fas fa-user-plus" style="color:var(--primary);"></i> Register New Customer Inquiry</h3>
-        <button class="btn-close" onclick="closeModal('modal-new-lead')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-          <div class="form-group">
-            <label>Customer Name *</label>
-            <input type="text" id="new-lead-name" class="form-control" placeholder="e.g. Anand Varma">
-          </div>
-          <div class="form-group">
-            <label>Phone Number (10 Digits) *</label>
-            <input type="text" id="new-lead-phone" class="form-control" placeholder="e.g. 9876543210">
-          </div>
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-          <div class="form-group">
-            <label>Business Division / Pillar</label>
-            <select id="new-lead-pillar" class="form-control">
-              <option value="doorstep_service">2. Doorstep Installation (gcmsafetynets.in)</option>
-              <option value="turnkey">1. Turnkey Sports / Box Cricket (gcm.enterprises)</option>
-              <option value="supply_only">3. Wholesale Netting Supply (netsocean.com)</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>City & Zone</label>
-            <input type="text" id="new-lead-city" class="form-control" placeholder="e.g. Hyderabad (Kondapur)">
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Requirement & Dimensions</label>
-          <textarea id="new-lead-req" class="form-control" rows="3" placeholder="e.g. 2 Balconies 15x6 and 10x4, invisible grill required."></textarea>
-        </div>
-        <div class="form-group">
-          <label>Estimated Project / Order Value (₹)</label>
-          <input type="number" id="new-lead-val" class="form-control" placeholder="e.g. 18000">
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline" onclick="closeModal('modal-new-lead')">Cancel</button>
-        <button class="btn btn-primary" onclick="submitNewLead()"><i class="fas fa-save"></i> Save Lead to CRM</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 6. 1-Tap Quick Call Lead Creator Modal (Phone Call Handoff) -->
-  <div id="modal-quick-call" class="modal-backdrop" style="display:none;">
-    <div class="modal-dialog">
-      <div class="modal-header" style="background:linear-gradient(135deg, rgba(16,185,129,0.15), transparent); border-bottom: 1px solid rgba(16,185,129,0.3);">
-        <h3><i class="fas fa-phone-volume" style="color:#10b981;"></i> Quick Call Lead (AI Handoff)</h3>
-        <button class="btn-close" onclick="closeModal('modal-quick-call')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p style="color:#94a3b8; font-size:12.5px; margin-bottom:14px;">
-          Received a phone call? Enter customer details in 5 seconds. AI Agent will immediately message them on WhatsApp with brand intro & catalog!
+        <p style="font-size:12.5px; color:var(--text-secondary);">
+          You just spoke with a customer on phone. Enter their number below, and ChatGCM will immediately take over on WhatsApp with greetings, catalog, and quotation!
         </p>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-          <div class="form-group">
-            <label style="color:#34d399; font-weight:700;">Customer Phone (10 Digits) *</label>
-            <input type="tel" id="qc-phone" class="form-control" placeholder="e.g. 9876543210" style="font-size:16px; font-weight:700; letter-spacing:1px; border-color:#10b981;" autofocus>
-          </div>
-          <div class="form-group">
-            <label>Brand / Website *</label>
-            <select id="qc-website" class="form-control" onchange="onQuickCallBrandChange()">
-              <option value="gcmsafetynets">Hyderabad — GCM Safety Nets</option>
-              <option value="gcmnetting">Bangalore — GCM Netting</option>
-              <option value="gcmnettingsolutions">Chennai — GCM Netting Solutions</option>
-              <option value="gcm-enterprises">Pan-India — GCM Enterprises (Sports/Turnkey)</option>
-              <option value="gcminvisiblegrills">Invisible Grills — gcminvisiblegrills.com</option>
-              <option value="netsdial">Directory — netsdial.com</option>
-              <option value="ushaleads">Engine — ushaleads.in</option>
-              <option value="russea">Manufacturer — russea.in</option>
-              <option value="netsocean">Wholesale — netsocean.com</option>
-            </select>
-          </div>
+        <div class="form-group">
+          <label>Customer Phone Number *</label>
+          <input type="text" id="qc-phone" class="form-control" placeholder="e.g. 9848012345 or +91 99664 99144">
         </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-          <div class="form-group">
-            <label>Customer Name</label>
-            <input type="text" id="qc-name" class="form-control" placeholder="e.g. Suresh Varma">
-          </div>
-          <div class="form-group">
-            <label>City & Locality</label>
-            <input type="text" id="qc-city" class="form-control" placeholder="e.g. Hyderabad (Kondapur)">
+        <div class="form-group">
+          <label>Customer Name (Optional)</label>
+          <input type="text" id="qc-name" class="form-control" placeholder="e.g. Rajesh Sharma / Flat 402">
+        </div>
+        <div class="form-group">
+          <label>Target Website Brand *</label>
+          <select id="qc-website" class="form-control">
+            <option value="gcmsafetynets">GCM Safety Nets (gcmsafetynets.in) - Hyderabad</option>
+            <option value="netsocean">NetsOcean (netsocean.com) - Wholesale / Sports Ground</option>
+            <option value="gcm-enterprises">GCM Enterprises (gcm.enterprises) - Turnkey Construction</option>
+            <option value="gcminvisiblegrills">GCM Invisible Grills (gcminvisiblegrills.com)</option>
+            <option value="netsdial">NetsDial Directory (netsdial.com)</option>
+            <option value="ushaleads">Usha Leads (ushaleads.in)</option>
+            <option value="gcmnetting">GCM Netting (gcmnetting.com) - Bangalore</option>
+            <option value="russea">RUSSEA™ Branded Nets (russea.in)</option>
+            <option value="gcmnettingsolutions">GCM Netting Solutions (gcmnettingsolutions.com) - Chennai</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Quick Presets (Click to auto-fill requirement):</label>
+          <div class="presets-grid">
+            <button type="button" class="preset-btn" onclick="fillQuickCallReq('300 SFT Balcony Pigeon Netting with SS 316 hooks')">
+              🕊️ 300 SFT Balcony Pigeon Net
+            </button>
+            <button type="button" class="preset-btn" onclick="fillQuickCallReq('500 SFT High-Tenacity Child Safety Net for Apartments')">
+              🛡️ 500 SFT Balcony Safety Net
+            </button>
+            <button type="button" class="preset-btn" onclick="fillQuickCallReq('250 SFT AISI 316 Marine Invisible Grill Installation')">
+              ✨ 250 SFT SS Invisible Grill
+            </button>
+            <button type="button" class="preset-btn" onclick="fillQuickCallReq('Turnkey Box Cricket Ground (100x50x25ft) with Turf')">
+              🏏 Box Cricket Ground Turnkey
+            </button>
+            <button type="button" class="preset-btn" onclick="fillQuickCallReq('1 Bag (3,300 SFT) 45mm HDPE Braided Netting Supply')">
+              📦 1 Bag NetsOcean 45mm Supply
+            </button>
+            <button type="button" class="preset-btn" onclick="fillQuickCallReq('Ceiling Cloth Drying Hanger 6-Pipe Installation')">
+              👕 6-Pipe Cloth Drying Hanger
+            </button>
           </div>
         </div>
         <div class="form-group">
-          <label>Service / Inquiry Type</label>
-          <select id="qc-service" class="form-control" onchange="onQuickCallServiceChange()">
-            <option value="Balcony Safety Nets Installation">Balcony Safety Nets Installation</option>
-            <option value="Pigeon Netting & Anti-Bird Spikes">Pigeon Netting & Anti-Bird Spikes</option>
-            <option value="SS 316 Invisible Grills">SS 316 Invisible Grills</option>
-            <option value="Children Safety Netting">Children Safety Netting</option>
-            <option value="Box Cricket Ground Setup (Turnkey)">Box Cricket Ground Setup (Turnkey)</option>
-            <option value="Cricket Practice Net (Rooftop/Ground)">Cricket Practice Net (Rooftop/Ground)</option>
-            <option value="Football Turf Netting">Football Turf Netting</option>
-            <option value="Wholesale Netting Bundles / Rolls">Wholesale Netting Bundles / Rolls</option>
-            <option value="Other">Other Custom Requirement</option>
-          </select>
-        </div>
-        <div class="form-group" id="qc-custom-req-group" style="display:none;">
-          <label>Specify Custom Requirement</label>
-          <input type="text" id="qc-custom-req" class="form-control" placeholder="Describe requirement...">
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-          <div class="form-group">
-            <label>Estimated Value (₹) (Optional)</label>
-            <input type="number" id="qc-val" class="form-control" placeholder="e.g. 8500">
-          </div>
-          <div class="form-group">
-            <label>Quick Call Notes</label>
-            <input type="text" id="qc-notes" class="form-control" placeholder="e.g. Needs evening visit, 2 balconies">
-          </div>
+          <label>Requirement Notes</label>
+          <textarea id="qc-req" class="form-control" rows="2" placeholder="e.g., 300 SFT Balcony Pigeon Netting, Manikonda, needs installation tomorrow"></textarea>
         </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline" onclick="closeModal('modal-quick-call')">Cancel</button>
-        <button class="btn btn-primary" onclick="submitQuickCallLead()" style="background:linear-gradient(135deg, #10b981 0%, #059669 100%); font-weight:700;"><i class="fas fa-rocket"></i> Launch WhatsApp AI Auto-Pilot</button>
+        <button class="btn btn-green" onclick="submitQuickCallLead()">
+          <i class="fab fa-whatsapp"></i> Initiate WhatsApp AI Follow-Up
+        </button>
       </div>
     </div>
   </div>
 
-  <!-- 7. Update Customer WhatsApp Number Modal (For leads with no WA) -->
-  <div id="modal-update-whatsapp" class="modal-backdrop" style="display:none;">
-    <div class="modal-dialog">
-      <div class="modal-header" style="background:rgba(239,68,68,0.1); border-bottom:1px solid rgba(239,68,68,0.3);">
-        <h3><i class="fab fa-whatsapp" style="color:#22c55e;"></i> Connect Customer WhatsApp</h3>
-        <button class="btn-close" onclick="closeModal('modal-update-whatsapp')">&times;</button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" id="upwa-lead-id">
-        <p style="color:#cbd5e1; font-size:13px;">
-          Meta reported that <strong id="upwa-customer-name" style="color:#f8fafc;">Customer</strong> does not have WhatsApp on calling number <code id="upwa-calling-phone" style="color:#60a5fa;"></code>.
-        </p>
-        <div style="margin:12px 0; padding:12px; background:rgba(239,68,68,0.1); border-radius:8px; border-left:3px solid #ef4444; font-size:12.5px; color:#fca5a5;">
-          <strong>Instructions for Gopichand:</strong><br>
-          1. Call the customer at <a id="upwa-call-link" href="#" style="color:#60a5fa; text-decoration:underline;">calling number</a>.<br>
-          2. Ask for their active WhatsApp number.<br>
-          3. Enter it below and click <strong>Resume AI Auto-Pilot</strong>.
-        </div>
-        <div class="form-group">
-          <label style="color:#22c55e; font-weight:700;">Customer WhatsApp Number (10 Digits) *</label>
-          <input type="tel" id="upwa-new-phone" class="form-control" placeholder="e.g. 9912399224" style="font-size:16px; font-weight:700; letter-spacing:1px;" autofocus>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline" onclick="closeModal('modal-update-whatsapp')">Cancel</button>
-        <button class="btn btn-primary" onclick="submitUpdateWhatsApp()" style="background:#22c55e; border-color:#16a34a; font-weight:700;"><i class="fab fa-whatsapp"></i> Save & Resume AI Auto-Pilot</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 8. Dispatch Turnkey / Custom Quotation Modal -->
-  <div id="modal-dispatch-quotation" class="modal-backdrop" style="display:none;">
-    <div class="modal-dialog">
-      <div class="modal-header" style="background:linear-gradient(135deg, rgba(99,102,241,0.15), transparent); border-bottom: 1px solid rgba(99,102,241,0.3);">
-        <h3><i class="fas fa-file-invoice-dollar" style="color:#818cf8;"></i> Dispatch Quotation & Payment Details</h3>
-        <button class="btn-close" onclick="closeModal('modal-dispatch-quotation')">&times;</button>
+  <!-- Modal: Dispatch Quotation -->
+  <div id="modal-dispatch-quotation" class="modal-overlay hidden">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fas fa-file-invoice-dollar" style="color:var(--accent-amber);"></i> Send Official GCM Quotation</h3>
+        <button class="btn-outline btn-sm" onclick="closeModal('modal-dispatch-quotation')"><i class="fas fa-times"></i></button>
       </div>
       <div class="modal-body">
         <input type="hidden" id="dq-lead-id">
         <div class="form-group">
-          <label>Customer & Destination</label>
-          <input type="text" id="dq-customer-info" readonly style="background:#0f172a; font-weight:600;">
+          <label>Customer Name & Phone</label>
+          <input type="text" id="dq-customer-info" class="form-control" readonly style="opacity:0.8;">
+        </div>
+        <div class="form-group">
+          <label>Product / Service Scope *</label>
+          <input type="text" id="dq-item-desc" class="form-control" placeholder="e.g. RUSSEA™ High-Tenacity Balcony Netting with SS Fasteners">
         </div>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
           <div class="form-group">
-            <label>Quotation / Doc Number</label>
-            <input type="text" id="dq-quote-num" class="form-control" placeholder="e.g. GCM-QT-2026-1045 or EST-202609-045">
+            <label>Quantity / Area (SFT/Unit) *</label>
+            <input type="number" id="dq-qty" class="form-control" value="300" oninput="calculateQuoteTotal()">
           </div>
           <div class="form-group">
-            <label>Project / Scope Title</label>
-            <input type="text" id="dq-project-name" class="form-control" placeholder="e.g. Box Cricket 100x50x25ft Setup">
+            <label>Rate per SFT/Unit (₹) *</label>
+            <input type="number" id="dq-rate" class="form-control" value="22" oninput="calculateQuoteTotal()">
           </div>
         </div>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
           <div class="form-group">
-            <label style="color:#34d399; font-weight:700;">Grand Total Amount (₹) *</label>
-            <input type="number" id="dq-grand-total" class="form-control" placeholder="e.g. 45000" style="font-size:16px; font-weight:700; color:#34d399;">
+            <label>Discount (%) [Max 4% AI Guardrail]</label>
+            <input type="number" id="dq-discount" class="form-control" value="0" max="4" oninput="calculateQuoteTotal()">
           </div>
           <div class="form-group">
-            <label>Official PDF / Estimation View URL</label>
-            <input type="text" id="dq-view-url" class="form-control" placeholder="https://gcm.enterprises/admin/view.php?id=...">
+            <label>Final Estimated Total (₹)</label>
+            <input type="text" id="dq-total" class="form-control" value="₹ 6,600" readonly style="font-weight:800; color:var(--accent-green);">
           </div>
         </div>
-        <div style="margin-top:14px; padding:12px; background:#0f172a; border-radius:8px; border:1px solid #334155;">
-          <strong style="font-size:12.5px; color:#cbd5e1; display:block; margin-bottom:8px;">Include Official Payment Instruments in WhatsApp Message:</strong>
-          <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer; font-size:13px;">
-            <input type="checkbox" id="dq-inc-bank" checked>
-            <span>🏦 <strong>State Bank of India</strong> (A/C: 44979437825 | IFSC: SBIN0021462 | Greenpark Colony)</span>
-          </label>
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px;">
-            <input type="checkbox" id="dq-inc-upi" checked>
-            <span>📲 <strong>Official UPI</strong> (<code>9912399224@sbi</code> / PhonePe / GPay 9912399224)</span>
-          </label>
+
+        <!-- Bank Details Card Preview -->
+        <div class="bank-preview-card">
+          <strong style="font-size:12px; color:var(--accent-green);"><i class="fas fa-university"></i> Official Bank & UPI Details Attached:</strong>
+          <p><span>Bank:</span> <strong>State Bank of India (SBI)</strong></p>
+          <p><span>Current A/C:</span> <strong>44979437825</strong></p>
+          <p><span>IFSC Code:</span> <strong>SBIN0021462</strong></p>
+          <p><span>Branch:</span> <strong>Greenpark Colony</strong></p>
+          <p><span>Official UPI ID:</span> <strong>9912399224@sbi</strong></p>
         </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline" onclick="closeModal('modal-dispatch-quotation')">Cancel</button>
-        <button class="btn btn-primary" onclick="submitDispatchQuotation()" style="background:#6366f1; border-color:#4f46e5; font-weight:700;"><i class="fab fa-whatsapp"></i> Dispatch Quotation & Details via WhatsApp</button>
+        <button class="btn btn-amber" onclick="submitDispatchQuotation()">
+          <i class="fab fa-whatsapp"></i> Deliver Quotation to WhatsApp
+        </button>
       </div>
     </div>
   </div>
 
+  <!-- Modal: Record Dispatch & Logistics (Bilty) -->
+  <div id="modal-record-dispatch" class="modal-overlay hidden">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fas fa-truck-fast" style="color:#ec4899;"></i> Record Shipment Dispatch & Bilty</h3>
+        <button class="btn-outline btn-sm" onclick="closeModal('modal-record-dispatch')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="rd-lead-id">
+        <div class="form-group">
+          <label>Customer Name & Phone</label>
+          <input type="text" id="rd-customer-info" class="form-control" readonly style="opacity:0.8;">
+        </div>
+        <div class="form-group">
+          <label>Transporter Name *</label>
+          <select id="rd-transporter" class="form-control">
+            <option value="Navata Road Transport">Navata Road Transport</option>
+            <option value="VRL Logistics">VRL Logistics</option>
+            <option value="Kranti Road Transport">Kranti Road Transport</option>
+            <option value="V-Trans India">V-Trans India</option>
+            <option value="DTDC Courier / Express">DTDC Courier / Express</option>
+            <option value="Professional Couriers">The Professional Couriers</option>
+            <option value="Private Bus / Travels Cargo">Private Bus / Travels Cargo</option>
+            <option value="Direct Van Delivery">GCM Direct Van Delivery (Local)</option>
+          </select>
+        </div>
+        <div style="display:grid; grid-template-columns: 2fr 1fr; gap:12px;">
+          <div class="form-group">
+            <label>LR / Bilty Docket Number *</label>
+            <input type="text" id="rd-lr-number" class="form-control" placeholder="e.g. NAV-9842104 / LR-4491">
+          </div>
+          <div class="form-group">
+            <label>No. of Parcels *</label>
+            <input type="number" id="rd-parcels" class="form-control" value="1" min="1">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Expected Delivery Date (Optional)</label>
+          <input type="date" id="rd-delivery-date" class="form-control">
+        </div>
+        <div style="background:rgba(236, 72, 153, 0.08); border:1px solid rgba(236, 72, 153, 0.3); padding:12px; border-radius:8px; font-size:12px; color:#fbcfe8;">
+          <i class="fas fa-info-circle"></i> Once saved, a formal WhatsApp dispatch confirmation will be sent to the customer, and our autonomous follow-up engine will automatically check in with the customer <strong>48 hours later</strong> to verify safe arrival!
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal('modal-record-dispatch')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitRecordDispatch()">
+          <i class="fab fa-whatsapp"></i> Send Dispatch Slip to Client
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Update WhatsApp Number (For Red Alert Missing WA) -->
+  <div id="modal-update-whatsapp" class="modal-overlay hidden">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3><i class="fab fa-whatsapp" style="color:var(--accent-green);"></i> Update WhatsApp Number</h3>
+        <button class="btn-outline btn-sm" onclick="closeModal('modal-update-whatsapp')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="uw-lead-id">
+        <div class="form-group">
+          <label>Customer Name & Calling Number</label>
+          <input type="text" id="uw-customer-info" class="form-control" readonly style="opacity:0.8;">
+        </div>
+        <div class="form-group">
+          <label>Active WhatsApp Number (Collected from call) *</label>
+          <input type="text" id="uw-phone" class="form-control" placeholder="e.g. 9966499144 or 9848012345">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal('modal-update-whatsapp')">Cancel</button>
+        <button class="btn btn-green" onclick="submitUpdateWhatsApp()">
+          <i class="fab fa-whatsapp"></i> Save & Resume AI Auto-Pilot
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>

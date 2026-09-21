@@ -1,3 +1,4 @@
+import { getAgentPersona } from '../ai/persona.js';
 /**
  * Lead Management & Universal CRM Pipeline Service
  * Unified across all 9 GCM Platforms:
@@ -594,7 +595,7 @@ export async function createQuickCallLead(input: QuickCallLeadInput) {
   logLeadActivity(
     lead.id,
     'PHONE_CALL_HANDOFF',
-    `Owner handed off phone inquiry to AI Auto-Pilot. Customer: ${customerName} (${cleanPhone})`,
+    `Owner handed off phone inquiry to local project coordinator. Customer: ${customerName} (${cleanPhone})`,
     input.performedBy || 'OWNER'
   );
 
@@ -604,7 +605,8 @@ export async function createQuickCallLead(input: QuickCallLeadInput) {
 
   let msg = `Namaste ${customerName}! 🙏\n\n`;
   msg += `Thank you for speaking with our Managing Director Mr. Gopichand on the call.\n`;
-  msg += `As discussed, I am your dedicated AI project coordinator from *${brandName}* (*${city}*).\n\n`;
+  const persona = getAgentPersona(city, websiteId, brandName);
+  msg += `As discussed with our Managing Director Mr. Gopichand, I am ${persona.name}, your dedicated project coordinator from *${brandName}* (*${city}*).\n\n`;
   msg += `📌 *Your Requirement:* ${reqSummary}\n\n`;
 
   if (pillar === 'turnkey') {

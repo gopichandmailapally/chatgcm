@@ -175,7 +175,7 @@ export function calculateSafetyNetInstallation(input: BalconyServiceInput): Balc
   const totalAmount = isMinApplied ? minPrice : Math.round(avgRate * totalSft);
 
   return {
-    serviceName: serviceType === 'pigeon_net' ? 'Garware Anti-Pigeon Bird Net' : 'Garware High-Tenacity Balcony Safety Net',
+    serviceName: serviceType === 'pigeon_net' ? 'RUSSEA™ Anti-Pigeon Bird Net' : 'RUSSEA™ High-Tenacity Balcony Safety Net',
     totalActualSft: totalSft,
     billedSft,
     isMinimumBillingApplied: isMinApplied,

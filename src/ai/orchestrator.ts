@@ -1,14 +1,21 @@
 /**
- * Central AI Sales Brain Orchestrator
- * Strictly routes inquiries across the 3 Master Business Pillars:
- * 1. Pillar 1: Turnkey Sports & Box Cricket (gcm.enterprises rates)
- * 2. Pillar 2: Doorstep Services with Installation (gcmsafetynets.in rates)
- * 3. Pillar 3: Material Sales & Supply-Only Netting (netsocean.com rates)
- * Includes: Phone Memory for returning customers & Human Takeover detection.
+ * Central Human Sales Consultant & Technical Client Relationship Engine
+ * Completely humanized — Never discloses or identifies as an AI or automated system.
+ * Dynamically adapts persona, name, language, and cultural greetings according to customer's city.
  */
 
 import { executeToolCall } from './tool-executor.js';
 import { db } from '../db/database.js';
+import { knowledgeEngine } from './knowledge-engine.js';
+import { analyzeCustomerSchedule } from './scheduler-nlp.js';
+import { 
+  detectCustomerCity, 
+  detectCustomerLanguage, 
+  getAgentPersona, 
+  isAskingIfAi,
+  SupportedLanguage 
+} from './persona.js';
+import { logAgentWork } from './agent-audit-service.js';
 import crypto from 'node:crypto';
 
 export interface ChatRequest {
@@ -23,7 +30,7 @@ export interface ChatRequest {
 export interface ChatResponse {
   sessionId: string;
   reply: string;
-  cardType?: 'calculation' | 'turnkey_boq' | 'supply_quote' | 'product_pricing' | 'approval_notice' | 'quotation' | 'human_takeover';
+  cardType?: 'calculation' | 'turnkey_boq' | 'supply_quote' | 'product_pricing' | 'approval_notice' | 'quotation' | 'human_takeover' | 'schedule_notice';
   cardData?: any;
 }
 
@@ -33,7 +40,7 @@ export async function processUserMessage(req: ChatRequest): Promise<ChatResponse
   const channel = req.channel || 'web_chat';
   const userText = req.message.trim();
 
-  // 1. Omnichannel Session & History Tracking
+  // ── 1. Omnichannel Session & History Tracking ─────────────────────────────────
   let conversation = db.prepare('SELECT * FROM conversations WHERE session_id = ?').get(sessionId) as any;
   let history: any[] = [];
 
@@ -61,42 +68,200 @@ export async function processUserMessage(req: ChatRequest): Promise<ChatResponse
   const phoneMatch = userText.match(/(?:\+91|91|0)?[6-9]\d{9}/);
   const detectedPhone = req.phone || (phoneMatch ? phoneMatch[0].replace(/\D/g, '').slice(-10) : null);
 
-  // ── Phone Memory: Look up returning customer in CRM ────────────────────────
+  // Phone Memory: Look up returning customer in CRM
   let existingCustomer: any = null;
-  let pastQuotesCount = 0;
   if (detectedPhone) {
     existingCustomer = db.prepare('SELECT * FROM leads WHERE phone LIKE ? ORDER BY created_at DESC LIMIT 1').get(`%${detectedPhone}%`) as any;
-    if (existingCustomer) {
-      const qCount = db.prepare('SELECT COUNT(*) as cnt FROM quotations WHERE lead_id = ?').get(existingCustomer.id) as any;
-      pastQuotesCount = qCount ? qCount.cnt : 0;
-    }
   }
+
+  // ── 2. Regional Human Persona & Language Resolution ─────────────────────────
+  const detectedCity = detectCustomerCity(userText, websiteId, existingCustomer?.city);
+  const detectedLang: SupportedLanguage = detectCustomerLanguage(userText);
+  const brandKnowledge = knowledgeEngine.getKnowledgeForWebsite(websiteId);
+  const brandName = brandKnowledge?.brandName || 'GCM Safety Nets';
+  const persona = getAgentPersona(detectedCity, websiteId, brandName);
+
+  const customerDisplayName = req.customerName && !req.customerName.includes('Visitor') && !req.customerName.includes('Customer')
+    ? req.customerName 
+    : existingCustomer?.customer_name && !existingCustomer.customer_name.includes('Visitor')
+    ? existingCustomer.customer_name 
+    : 'Sir/Madam';
 
   const lower = userText.toLowerCase();
 
-  // ── Human Takeover Trigger Detection ───────────────────────────────────────
+  // ── 3. Anti-AI / Bot Suspicion Shield ────────────────────────────────────────
+  // If customer asks "Are you a bot?", "Are you AI?", etc., respond naturally as a human!
+  if (isAskingIfAi(userText)) {
+    const doubtReply = persona.handleAiDoubt(customerDisplayName, detectedLang);
+    history.push({ role: 'assistant', content: doubtReply, timestamp: new Date().toISOString() });
+    db.prepare(`
+      UPDATE conversations 
+      SET messages = ?, updated_at = CURRENT_TIMESTAMP 
+      WHERE session_id = ?
+    `).run(JSON.stringify(history), sessionId);
+
+    logAgentWork({
+      persona_name: persona.name,
+      lead_id: existingCustomer?.id,
+      phone: detectedPhone,
+      website_id: websiteId,
+      channel,
+      city: detectedCity,
+      action_type: 'INQUIRY_ANSWERED',
+      action_title: 'Anti-AI Persona Reassurance',
+      work_summary: `${persona.name} warmly reassured ${customerDisplayName} as a real human regional consultant in ${persona.city}.`
+    });
+
+    return {
+      sessionId,
+      reply: doubtReply
+    };
+  }
+
+  // ── 4. Intelligent Non-Intrusive Scheduling & Opt-Out NLP ─────────────────────
+  const scheduleAnalysis = analyzeCustomerSchedule(userText, customerDisplayName, detectedCity, websiteId);
+  if (scheduleAnalysis.hasSchedulingIntent) {
+    if (detectedPhone) {
+      let lead = existingCustomer || (db.prepare('SELECT id FROM leads WHERE phone LIKE ? LIMIT 1').get(`%${detectedPhone}%`) as any);
+      if (!lead) {
+        const leadId = 'LEAD-' + crypto.randomBytes(4).toString('hex').toUpperCase();
+        db.prepare(`
+          INSERT INTO leads (id, website_id, customer_name, phone, requirement_summary, stage, snooze_until, scheduled_callback_at, preferred_contact_time, opt_out, last_customer_message_at, city)
+          VALUES (?, ?, ?, ?, ?, 'NEW', ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+        `).run(
+          leadId,
+          websiteId,
+          customerDisplayName !== 'Sir/Madam' ? customerDisplayName : 'Valued Customer',
+          detectedPhone,
+          userText,
+          scheduleAnalysis.snoozeUntil,
+          scheduleAnalysis.scheduledCallbackAt,
+          scheduleAnalysis.preferredTimeSummary,
+          scheduleAnalysis.isOptOut ? 1 : 0,
+          detectedCity
+        );
+      } else {
+        db.prepare(`
+          UPDATE leads 
+          SET snooze_until = ?,
+              scheduled_callback_at = ?,
+              preferred_contact_time = ?,
+              opt_out = ?,
+              last_customer_message_at = CURRENT_TIMESTAMP,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(
+          scheduleAnalysis.snoozeUntil,
+          scheduleAnalysis.scheduledCallbackAt,
+          scheduleAnalysis.preferredTimeSummary,
+          scheduleAnalysis.isOptOut ? 1 : 0,
+          lead.id
+        );
+      }
+    }
+
+    db.prepare(`
+      UPDATE conversations 
+      SET snooze_until = ?,
+          scheduled_callback_at = ?,
+          opt_out = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE session_id = ?
+    `).run(
+      scheduleAnalysis.snoozeUntil,
+      scheduleAnalysis.scheduledCallbackAt,
+      scheduleAnalysis.isOptOut ? 1 : 0,
+      sessionId
+    );
+
+    const replyText = scheduleAnalysis.courteousAckMessage || `Understood! I will personally connect with you at your preferred time. Have a great day! — ${persona.name}`;
+    
+    history.push({
+      role: 'assistant',
+      content: replyText,
+      timestamp: new Date().toISOString()
+    });
+
+    db.prepare(`
+      UPDATE conversations 
+      SET messages = ?, updated_at = CURRENT_TIMESTAMP 
+      WHERE session_id = ?
+    `).run(JSON.stringify(history), sessionId);
+
+    logAgentWork({
+      persona_name: persona.name,
+      lead_id: existingCustomer?.id,
+      phone: detectedPhone,
+      website_id: websiteId,
+      channel,
+      city: detectedCity,
+      action_type: 'CALLBACK_SCHEDULED',
+      action_title: scheduleAnalysis.isOptOut ? 'Opt-Out Honored' : 'Customer Callback Scheduled',
+      work_summary: scheduleAnalysis.isOptOut
+        ? `${persona.name} honored customer opt-out request non-intrusively.`
+        : `${persona.name} scheduled polite callback for ${customerDisplayName} at ${scheduleAnalysis.preferredTimeSummary || 'convenient time'}.`,
+      details: scheduleAnalysis
+    });
+
+    return {
+      sessionId,
+      reply: replyText,
+      cardType: 'schedule_notice',
+      cardData: scheduleAnalysis
+    };
+  }
+
+  // ── 5. Human Takeover / Direct Owner Connect ─────────────────────────────────
   const isHumanTakeover = lower.includes('gopichand') ||
                           lower.includes('speak to owner') ||
                           lower.includes('call me directly') ||
-                          lower.includes('talk to human') ||
-                          lower.includes('connect to human') ||
+                          lower.includes('talk to md') ||
                           lower.includes('urgent call');
 
   if (isHumanTakeover) {
     db.prepare('UPDATE conversations SET human_takeover = 1 WHERE session_id = ?').run(sessionId);
     
-    const replyText = `🚨 **Direct Connect with Business Owner Registered!**
+    let replyText = '';
+    if (detectedLang === 'telugu') {
+      replyText = `తప్పకుండా సర్! 🙏
 
-I have flagged your request directly for **Mr. Gopichand Mailapally** (Founder & Managing Director, GCM Enterprises).
+నేను స్వయంగా మా మేనేజింగ్ డైరెక్టర్ **మిస్టర్ గోపీచంద్ మైలపల్లి** గారికి మీ రిక్వెస్ట్ ఫార్వార్డ్ చేశాను.
 
 ${detectedPhone 
-  ? `Our direct line has recorded your contact number: **+91 ${detectedPhone}**.\nMr. Gopichand or our Senior Technical Director will connect with you via phone / WhatsApp within **10 to 15 minutes**.` 
-  : `Please reply with your **Phone Number and City** so Mr. Gopichand can connect with you directly.`}
+  ? `మా డైరెక్టర్ లైన్ లో మీ నెంబర్ **+91 ${detectedPhone}** నోట్ చేసుకున్నాము. గోపీచంద్ గారు లేదా మా సీనియర్ డైరెక్టర్ 10 నుండి 15 నిమిషాల్లో మీకు కాల్ చేస్తారు సర్.` 
+  : `గోపీచంద్ గారు నేరుగా మాట్లాడటానికి మీ **ఫోన్ నెంబర్ మరియు ఊరు/ఏరియా** ఇక్కడ మెసేజ్ చేయండి సర్.`}
 
-For urgent commercial inquiries, you can also reach our executive hotline directly at **+91 99123 99224** / **+91 99123 99227**.`;
+అర్జెంట్ ప్రాజెక్ట్ అయితే మా డైరెక్ట్ హాట్ లైన్ **+91 99123 99224** కి కూడా మీరు ఎప్పుడైనా డైరెక్ట్ గా కాల్ చేయవచ్చు సర్!
+
+— **${persona.name}** (${brandName})`;
+    } else {
+      replyText = `Understood, ${customerDisplayName}! 🙏
+
+I have directly notified our Founder & Managing Director **Mr. Gopichand Mailapally** regarding your requirement.
+
+${detectedPhone 
+  ? `We have recorded your contact number **+91 ${detectedPhone}**. Mr. Gopichand or our Senior Technical Director will connect with you via phone / WhatsApp within **10 to 15 minutes**.` 
+  : `Please share your **Phone Number and City** so Mr. Gopichand can connect with you directly.`}
+
+For urgent commercial inquiries, you can also reach our executive direct line at **+91 99123 99224**.
+
+— **${persona.name}** | ${persona.designation}, ${brandName}`;
+    }
 
     history.push({ role: 'assistant', content: replyText, timestamp: new Date().toISOString() });
     db.prepare('UPDATE conversations SET messages = ?, updated_at = CURRENT_TIMESTAMP WHERE session_id = ?').run(JSON.stringify(history), sessionId);
+
+    logAgentWork({
+      persona_name: persona.name,
+      lead_id: existingCustomer?.id,
+      phone: detectedPhone,
+      website_id: websiteId,
+      channel,
+      city: detectedCity,
+      action_type: 'HUMAN_TAKEOVER_REQUESTED',
+      action_title: 'Owner Direct Connect Alerted',
+      work_summary: `${persona.name} notified Founder & MD Mr. Gopichand Mailapally for direct client connect with ${customerDisplayName} (+91 ${detectedPhone || 'Not provided'}).`
+    });
 
     return {
       sessionId,
@@ -106,304 +271,635 @@ For urgent commercial inquiries, you can also reach our executive hotline direct
     };
   }
 
-  // 2. Intent Identification & Deterministic Rule/Tool Processing
+  // ── 6. Knowledge & Specifications Resolution ─────────────────────────────────
+  const companyFin = knowledgeEngine.getCompanyFinancialDetails();
+
   let replyText = '';
   let cardType: ChatResponse['cardType'] = undefined;
   let cardData: any = undefined;
 
-  // Extract Dimensions (e.g. "100 x 50 x 25", "100*50", "15 x 6", "100 by 50 by 25")
+  // Extract Dimensions (e.g. "15 x 6", "100 x 50 x 25", "300 sft", "12 by 8")
   const dimMatch = lower.match(/(\d+(?:\.\d+)?)\s*(?:x|\*|by)\s*(\d+(?:\.\d+)?)(?:\s*(?:x|\*|by)\s*(\d+(?:\.\d+)?))?/i);
+  const sftMatch = lower.match(/(\d+(?:\.\d+)?)\s*(?:sq\s*ft|sqft|sft)/i);
 
   // Intent Checks
-  const isTurnkeyIntent = lower.includes('turnkey') || lower.includes('box cricket setup') || lower.includes('sports turf setup') || lower.includes('turf setup') || lower.includes('court construction') || lower.includes('cost to build') || lower.includes('cricket ground') || websiteId === 'gcm-enterprises';
-  const isSupplyOnlyIntent = lower.includes('supply only') || lower.includes('only supply') || lower.includes('material only') || lower.includes('netting bag') || lower.includes('wholesale') || lower.includes('courier') || lower.includes('rolls') || lower.includes('custom cut') || websiteId === 'netsocean' || websiteId === 'russea';
-  const isInstallationServiceIntent = lower.includes('balcony') || lower.includes('window') || lower.includes('pigeon') || lower.includes('bird') || lower.includes('invisible grill') || lower.includes('cloth hanger') || lower.includes('drying hanger') || lower.includes('doorstep') || lower.includes('service') || lower.includes('technician') || websiteId === 'gcmsafetynets' || websiteId === 'gcminvisiblegrills';
-
-  const isDiscount = lower.includes('discount') || lower.includes('concession') || lower.includes('best price') || lower.includes('less') || lower.includes('cheaper');
-  const isStock = lower.includes('stock') || lower.includes('available') || lower.includes('ready bags');
-  const isQuoteRequest = lower.includes('quotation') || lower.includes('formal quote') || lower.includes('send quote') || lower.includes('bill');
-  const isSiteVisit = lower.includes('site visit') || lower.includes('measurement') || lower.includes('free demo') || lower.includes('technician visit');
-
-  // Returning customer greeting prefix
-  let welcomePrefix = '';
-  if (existingCustomer && pastQuotesCount > 0) {
-    welcomePrefix = `👋 *Welcome back, ${existingCustomer.customer_name}!* Glad to assist you again.\n\n`;
-  }
+  const isTurnkeyIntent = lower.includes('turnkey') || lower.includes('box cricket') || lower.includes('sports turf') || lower.includes('turf setup') || lower.includes('court construction') || lower.includes('ground setup') || websiteId === 'gcm-enterprises';
+  const isSupplyOnlyIntent = lower.includes('supply only') || lower.includes('wholesale') || lower.includes('bag') || lower.includes('bundles') || lower.includes('transport') || lower.includes('courier') || websiteId === 'netsocean' || websiteId === 'russea';
+  const isInvisibleGrillIntent = lower.includes('invisible grill') || lower.includes('ss grill') || lower.includes('wire grill') || lower.includes('stainless steel grill') || websiteId === 'gcminvisiblegrills';
+  const isClothHangerIntent = lower.includes('cloth') || lower.includes('hanger') || lower.includes('drying') || lower.includes('pulley');
+  const isBankDetailsIntent = lower.includes('bank') || lower.includes('account') || lower.includes('ifsc') || lower.includes('upi') || lower.includes('payment method') || lower.includes('how to pay') || lower.includes('gpay') || lower.includes('phonepe');
+  const isQuoteRequest = lower.includes('quote') || lower.includes('quotation') || lower.includes('formal estimate') || lower.includes('send invoice') || lower.includes('pdf');
+  const isDiscount = lower.includes('discount') || lower.includes('kam karo') || lower.includes('best price') || lower.includes('thaggistara') || lower.includes('thaggandi') || lower.includes('concession');
+  const isSiteVisit = lower.includes('site visit') || lower.includes('visit') || lower.includes('measurement') || lower.includes('sample') || lower.includes('vastara') || lower.includes('chustara');
+  const isCompetitorInquiry = lower.includes('garware') ||
+                              lower.includes('గార్వేర్') ||
+                              lower.includes('गारवारे') ||
+                              lower.includes('tuff') ||
+                              lower.includes('tuf') ||
+                              lower.includes('kohinoor') ||
+                              lower.includes('ocean net');
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // PILLAR 1: TURNKEY SPORTS & BOX CRICKET (Rates as per gcm.enterprises)
+  // SCENARIO 1: COMPANY BANK & PAYMENT DETAILS INQUIRY
   // ═══════════════════════════════════════════════════════════════════════════
-  if (isTurnkeyIntent && (dimMatch || lower.includes('box cricket') || lower.includes('turf'))) {
-    const l = dimMatch ? Number(dimMatch[1]) : 100;
-    const w = dimMatch ? Number(dimMatch[2]) : 50;
-    const h = dimMatch && dimMatch[3] ? Number(dimMatch[3]) : 25;
+  if (isBankDetailsIntent) {
+    if (detectedLang === 'telugu') {
+      replyText = `నమస్కారం సర్! 🙏
 
-    const boq = await executeToolCall('calculate_turnkey_box_cricket', {
-      lengthFt: l,
-      widthFt: w,
-      heightFt: h,
-      packageType: 'commercial',
-      roofType: 'light_cable_top',
-      turfType: 'non_infill_turf',
-      civilBedType: 'compacted_wmm'
-    }, { websiteId });
+మీరు పేమెంట్ లేదా అడ్వాన్స్ పంపడానికి మా అధికారిక GCM ఎంటర్‌ప్రైజెస్ బ్యాంక్ వివరాలు ఇక్కడ ఉన్నాయి:
+
+• **బ్యాంక్**: ${companyFin.bankName}
+• **ఖాతా పేరు**: **${companyFin.accountName}**
+• **కరెంట్ అకౌంట్ నెం**: **${companyFin.currentAccountNo}**
+• **IFSC కోడ్**: **${companyFin.ifscCode}**
+• **బ్రాంచ్**: ${companyFin.branch}
+• **అధికారిక UPI ID**: **${companyFin.officialUpiId}**
+• **Google Pay / PhonePe / Paytm**: **9912399224**
+
+📌 *పేమెంట్ చేశాక స్క్రీన్‌షాట్ లేదా UTR నెంబర్ ఇక్కడ వాట్సాప్ చేయండి సర్. మా అకౌంట్స్ టీమ్ వెంటనే మీకు అఫీషియల్ జీఎస్టీ రసీదు పంపిస్తుంది!*${persona.formatSignoff(detectedLang)}`;
+    } else {
+      replyText = `Namaste ${customerDisplayName}! 🙏
+
+Here are our verified company bank credentials for booking your order or sending advance payments:
+
+• **Bank**: ${companyFin.bankName}
+• **Account Name**: **${companyFin.accountName}**
+• **Current Account No**: **${companyFin.currentAccountNo}**
+• **IFSC Code**: **${companyFin.ifscCode}**
+• **Branch**: ${companyFin.branch}
+• **Official UPI ID**: **${companyFin.officialUpiId}**
+• **Google Pay / PhonePe / Paytm**: **9912399224**
+
+📌 *Once transferred, simply share the payment screenshot or UTR number here. Our billing desk will immediately generate and dispatch your stamped official GST booking invoice!*${persona.formatSignoff(detectedLang)}`;
+    }
+
+    logAgentWork({
+      persona_name: persona.name,
+      lead_id: existingCustomer?.id,
+      phone: detectedPhone,
+      website_id: websiteId,
+      channel,
+      city: detectedCity,
+      action_type: 'BANK_DETAILS_SENT',
+      action_title: 'Official Bank Credentials Shared',
+      work_summary: `${persona.name} shared verified SBI account 44979437825 and UPI 9912399224@sbi with ${customerDisplayName}.`
+    });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SCENARIO 1B: COMPETITOR INQUIRY INTERCEPTION & RUSSEA™ TRADEMARK DEFENSE
+  // ═══════════════════════════════════════════════════════════════════════════
+  } else if (isCompetitorInquiry) {
+    cardType = 'product_pricing';
+    cardData = {
+      brand: 'RUSSEA™ (Proprietary Registered Trademark)',
+      competitorQueried: 'Garware / Tuff / Kohinoor / Ocean Nets',
+      usp: '100% Virgin UV Polymers, Factory Direct Pricing, 5-8 Year Replacement Warranty, SS 316 Hardware',
+      rateRange: '₹ 18 – ₹ 24 / SFT Installed',
+      warranty: '5 to 8-Year Official Factory Written Replacement Card'
+    };
+
+    if (detectedLang === 'telugu') {
+      replyText = `నమస్కారం ${customerDisplayName}! 🙏 నేను ${persona.name}, ${brandName} నుండి.
+
+మీరు అడిగిన **Garware, Tuff, Kohinoor, Ocean Nets** వంటివి బయటి 3rd-పార్టీ ట్రేడర్ బ్రాండ్స్ సర్. వాటిపై డీలర్ కమీషన్లు ఎక్కువగా ఉండటమే కాకుండా, లోకల్ వారంటీ క్లెయిమ్ చేయడం చాలా కష్టం.
+
+మా **GCM Enterprises** లో మేము మా స్వంత రిజిస్టర్డ్ ట్రేడ్‌మార్క్ బ్రాండ్ **RUSSEA™ (russea.in)** నెట్స్‌ను మాత్రమే నేరుగా తయారుచేసి ఇన్స్టాల్ చేస్తాము!
+
+🛡️ **బయటి బ్రాండ్ల కంటే మా RUSSEA™ ఎందుకు అత్యుత్తమం:**
+1. ☀️ **100% వర్జిన్ UV-స్టెబిలైజ్డ్ మెటీరియల్**: 400 KLY జర్మన్ UV స్టెబిలైజర్‌తో తయారుచేయబడింది — ఎండకు పెళుసుబారదు, 10 ఏళ్లకు పైగా దృఢంగా ఉంటుంది.
+2. 🏭 **డైరెక్ట్ ఫ్యాక్టరీ రేట్**: ఎటువంటి మధ్యవర్తులు లేదా డీలర్ మార్జిన్లు లేకుండా డైరెక్ట్ కంపెనీ రేటుకే (**₹ 18 – ₹ 24/SFT**) ప్రొఫెషనల్ ఫిట్టింగ్‌తో లభిస్తుంది.
+3. 📜 **అఫీషియల్ కంపెనీ వారంటీ**: ఇన్స్టాలేషన్ పూర్తయ్యాక 5 నుండి 8 సంవత్సరాల రాతపూర్వక రీప్లేస్‌మెంట్ వారంటీ కార్డ్ ఇస్తాము.
+4. 🔩 **SS 316 మెరైన్-గ్రేడ్ ఫిట్టింగ్స్**: వర్షాలకు తుప్పు పట్టని స్టెయిన్‌లెస్ స్టీల్ హుక్స్ తో మా కంపెనీ సర్టిఫైడ్ టెక్నీషియన్లు బిగిస్తారు.
+
+👉 *మీ బాల్కనీ పొడవు x ఎత్తు (లేదా SFT) చెబితే, ఇప్పుడే మా ఒరిజినల్ RUSSEA™ నెట్స్ కి బెస్ట్ కొటేషన్ ఇస్తాను సర్!*${persona.formatSignoff(detectedLang)}`;
+    } else if (detectedLang === 'hindi') {
+      replyText = `नमस्ते ${customerDisplayName}! 🙏 मैं ${persona.name}, ${brandName} से बात कर रहा हूँ।
+
+आपके सवाल के संदर्भ में: **Garware, Tuff Nets, Kohinoor Ropes और Ocean Nets** जैसी कंपनियाँ थर्ड-पार्टी ट्रेडर ब्रांड्स हैं, जिन पर डीलरों का भारी मार्जिन होता है और लोकल वारंटी क्लेम में अक्सर परेशानी आती है।
+
+**GCM Enterprises** में हम अपने स्वयं के रजिस्टर्ड ट्रेडमार्क ब्रांड **RUSSEA™ (russea.in)** का निर्माण और डायरेक्ट इंस्टॉलेशन करते हैं!
+
+🛡️ **अन्य ब्रांड्स की तुलना में RUSSEA™ क्यों बेहतर है:**
+1. ☀️ **100% वर्जिन UV-स्टेबलाइज्ड पॉलिमर्स**: 400 KLY जर्मन UV प्रोटेक्शन के साथ — तेज धूप में भी कभी कमजोर नहीं पड़ती और 10+ साल चलती है।
+2. 🏭 **फैक्ट्री-डायरेक्ट रेट**: बिना किसी बिचौलिए या डीलर कमीशन के, आपको सीधे फैक्ट्री रेट पर (**₹ 18 – ₹ 24 / SFT**) एक्सपर्ट इंस्टॉलेशन के साथ मिलती है।
+3. 📜 **ऑफिशियल कंपनी वारंटी कार्ड**: हर इंस्टॉलेशन पर 5 से 8 साल का लिखित कंपनी रिप्लेसमेंट वारंटी कार्ड मिलता है।
+4. 🔩 **SS 316 मरीन-ग्रेड हार्डवेयर**: जंग-रोधी स्टेनलेस स्टील फास्टनर्स के साथ हमारे सर्टिफाइड तकनीशियन इंस्टॉल करते हैं।
+
+👉 *कृपया अपनी बालकनी की लंबाई x चौड़ाई (फीट में) बताएं, ताकि मैं आपको RUSSEA™ का सबसे बेस्ट एस्टीमेट तुरंत निकाल कर दे सकूँ!*${persona.formatSignoff(detectedLang)}`;
+    } else {
+      replyText = `Namaste ${customerDisplayName}! 🙏 I am ${persona.name} from ${brandName}.
+
+Regarding your inquiry: **Garware, Tuff Nets, Kohinoor Ropes, and Ocean Nets** are 3rd-party trader brands. They carry heavy distributor markups, and getting authentic warranty claims from local dealers is often difficult.
+
+At **GCM Enterprises**, we manufacture and exclusively install our own official registered trademark brand: **RUSSEA™ (russea.in)**!
+
+🛡️ **Why Homeowners & Builders Choose RUSSEA™ Over Competitor Brands:**
+1. ☀️ **100% Virgin High-Tenacity Polymers**: Compounded with 400 KLY UV stabilizers — will never get brittle or degrade under harsh Indian sunlight (tested for 10+ years durability).
+2. 🏭 **Direct Factory Manufacturer Pricing**: Zero dealer middlemen or distributor margins — you get genuine heavy-duty 15-ply / 2.0mm nets at just **₹ 18 – ₹ 24 / SFT** fully installed.
+3. 📜 **Official Factory Written Warranty Card**: Stamped 5 to 8-Year Company Replacement Warranty Card issued with every installation (not unverified verbal claims).
+4. 🔩 **SS 316 Marine-Grade Fasteners**: 100% rust-proof stainless steel anchors with tension wire rope installed by certified company technicians.
+
+👉 *Could you please share your balcony dimensions (Length x Height in feet) so I can calculate your exact, transparent RUSSEA™ estimate right away?*${persona.formatSignoff(detectedLang)}`;
+    }
+
+    logAgentWork({
+      persona_name: persona.name,
+      lead_id: existingCustomer?.id,
+      phone: detectedPhone,
+      website_id: websiteId,
+      channel,
+      city: detectedCity,
+      action_type: 'COMPETITOR_DEFENSE_RUSSEA',
+      action_title: 'RUSSEA™ Brand Defense & Competitor Interception',
+      work_summary: `${persona.name} defended RUSSEA™ registered trademark against competitor query and explained factory-direct pricing with 5-8 year warranty.`
+    });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SCENARIO 2: TURNKEY BOX CRICKET GROUND SETUP (gcm.enterprises)
+  // ═══════════════════════════════════════════════════════════════════════════
+  } else if (isTurnkeyIntent) {
+    let length = 100;
+    let width = 50;
+    let height = 25;
+
+    if (dimMatch) {
+      length = parseFloat(dimMatch[1]);
+      width = parseFloat(dimMatch[2]);
+      if (dimMatch[3]) height = parseFloat(dimMatch[3]);
+    }
+
+    const groundArea = length * width;
+    const estTotalCost = Math.round(groundArea * 245);
+    const monthlyRoi = Math.round((groundArea / 5000) * 250000);
 
     cardType = 'turnkey_boq';
-    cardData = boq;
+    cardData = {
+      groundDimensions: `${length}ft x ${width}ft x ${height}ft`,
+      groundAreaSft: groundArea,
+      estimatedTurnkeyBudget: `₹ ${estTotalCost.toLocaleString('en-IN')}`,
+      breakdown: {
+        civilPitch: `₹ ${(Math.round(groundArea * 36)).toLocaleString('en-IN')}`,
+        cageFabrication: `₹ ${(Math.round(groundArea * 84)).toLocaleString('en-IN')}`,
+        sportsTurf: `₹ ${(Math.round(groundArea * 88)).toLocaleString('en-IN')}`,
+        overheadNetting: `₹ ${(Math.round(groundArea * 25)).toLocaleString('en-IN')}`,
+        stadiumLighting: `₹ ${(Math.round(groundArea * 19)).toLocaleString('en-IN')}`
+      },
+      commercialRoi: `Expected monthly revenue: ₹${monthlyRoi.toLocaleString('en-IN')}. Payback period: 8 to 11 months.`
+    };
 
-    replyText = `${welcomePrefix}🏏 **GCM Enterprises — Turnkey Box Cricket & Sports Turf Estimation**
-*(Source: Official gcm.enterprises Turnkey Estimation Engine)*
+    if (detectedLang === 'telugu') {
+      replyText = `నమస్కారం సర్! 🙏 నేను ${persona.name}, GCM Enterprises నుండి.
 
-**Project Dimensions**: ${l}ft (L) x ${w}ft (W) x ${h}ft (H) — **${boq.dimensions.groundAreaSft.toLocaleString('en-IN')} SFT Ground Area**
-**Package**: **${boq.packageName}** (~₹${boq.ratePerGroundSft}/SFT Ground Area)
+మీరు అడిగిన బాక్స్ క్రికెట్ గ్రౌండ్ (**${length}ft x ${width}ft x ${height}ft = ${groundArea.toLocaleString('en-IN')} SFT**) కంప్లీట్ టర్న్‌కీ ఎస్టిమేషన్ వివరాలు:
 
-📋 **Turnkey Bill of Quantities (BOQ) Breakdown:**
-1. 🏗️ **Structural Framework**: ${boq.structuralSteel.columnCount} GI Ladder Columns (40x40 GI with Zinc Primer + PU Coat) + ${boq.structuralSteel.horizontalTiePipesRft.toLocaleString('en-IN')} RFT Tie Pipes
-2. 🕸️ **Heavy-Duty Netting**: ${boq.nettingSpecs.totalNettingSft.toLocaleString('en-IN')} SFT Total
-   - Sides: ${boq.nettingSpecs.sideNettingSft.toLocaleString('en-IN')} SFT (RUSSEA™ 2.5mm HDPE Braided, 45mm mesh)
-   - Roof: ${boq.nettingSpecs.roofNettingSft.toLocaleString('en-IN')} SFT with 8% Camber Allowance (1.5mm / 24-Ply UV Twisted)
-3. 🌿 **Artificial Sports Turf**: ${boq.turfSystem.rollsRequired} Rolls (${boq.turfSystem.turfAreaSft.toLocaleString('en-IN')} SFT) 25mm Non-Infill Multi-Sport Grass
-4. 💡 **Stadium Lighting**: ${boq.lightingSystem.fixtureCount} Fixtures 200W IP66 Floodlights (${boq.lightingSystem.targetLux})
-5. 🧱 **Civil Base**: Heavy Rolled Compacted WMM Sub-base
+🏏 **టర్న్‌కీ ప్రాజెక్ట్ బడ్జెట్**: సుమారు **₹ ${estTotalCost.toLocaleString('en-IN')}** (పూర్తి గ్రౌండ్ ఆడే స్థితిలో అప్పగించడానికి)
 
-💰 **Commercial Summary:**
-- **Estimated Subtotal**: ₹${boq.subtotal.toLocaleString('en-IN')}
-- **GST (18%)**: ₹${boq.gstAmount.toLocaleString('en-IN')}
-- **Turnkey Project Total**: **₹${boq.grandTotal.toLocaleString('en-IN')}**
-- **Timeline**: **~${boq.estimatedTimelineDays} Days** to complete turnkey handover
-- **Warranty**: **${boq.warrantyYears} Years Structural & Netting Warranty**
+📋 **ప్రాజెక్ట్ లో ఏమేమి వస్తాయి:**
+1. **సివిల్ పిచ్ & బేస్**: 66ft x 10ft PCC కాంక్రీట్ పిచ్ మరియు రోల్డ్ సబ్-బేస్.
+2. **GI స్టీల్ కేజ్ ఫ్రేమ్‌వర్క్**: 40x40 హెవీ GI కాలమ్స్, పైపులు, డ్యూయల్ కోట్ యాంటీ-రస్ట్ ప్రైమర్ & కలర్ ఎనామెల్.
+3. **ఫిఫా స్టాండర్డ్ స్పోర్ట్స్ టర్ఫ్**: 25mm/35mm హై-డెన్సిటీ నాన్-ఇన్ఫిల్ టర్ఫ్, PU జాయింట్ అడ్హెసివ్ తో.
+4. **RUSSEA™ హెవీ డ్యూటీ నెట్టింగ్**: 2.5mm UV బ్రెయిడెడ్ నెట్స్ సైడ్స్ & రూఫ్ కి డ్రమ్-టైట్ బిగింపు.
+5. **స్టేడియం లైటింగ్**: 8x 200W/300W IP66 LED ఫ్లడ్‌లైట్స్ (జీరో షాడో).
 
-Would you like me to generate your official stamped GCM Enterprises Turnkey Quotation PDF?`;
+💰 **కమర్షియల్ ఆదాయం (ROI):**
+గంటకు ₹1,000 నుండి ₹1,500 బుకింగ్ తో నెలకు సుమారు **₹ ${monthlyRoi.toLocaleString('en-IN')}** ఆదాయం వస్తుంది సర్. 8 నుండి 11 నెలల్లో మీ మొత్తం పెట్టుబడి వెనక్కి వస్తుంది.
+
+👉 *నేను స్వయంగా మా సీనియర్ గ్రౌండ్ ఇంజనీర్ ని మీ స్థలం సర్వే కోసం పంపించగలను సర్. ఫ్రీ సైట్ విజిట్ ఎప్పుడు ప్లాన్ చేద్దాం సర్?*${persona.formatSignoff(detectedLang)}`;
+    } else {
+      replyText = `Namaste ${customerDisplayName}! 🙏 I am ${persona.name} from GCM Enterprises.
+
+For your Turnkey Box Cricket Ground (**${length}ft x ${width}ft x ${height}ft = ${groundArea.toLocaleString('en-IN')} SFT**), I have calculated the complete turnkey Bill of Quantities:
+
+🏏 **Turnkey Project Estimate**: Approximately **₹ ${estTotalCost.toLocaleString('en-IN')}** (Playing-ready handover)
+
+📋 **Complete BOQ Inclusions:**
+1. **Civil Pitch & Base**: 66ft x 10ft standard bowling/batting PCC concrete pitch & rolled sub-base.
+2. **Heavy GI Steel Structure**: 40x40 GI heavy columns, roof trusses, dual-coat anti-rust primer and exterior enamel.
+3. **FIFA-Grade Multi-Sport Turf**: 25mm/35mm high-density non-infill turf with PU joint adhesive.
+4. **RUSSEA™ Enclosure Netting**: 2.5mm high-tenacity braided UV-treated side and roof nets with drum-tight turnbuckle rigging.
+5. **Stadium Lighting**: 8x high-lux 200W/300W LED floodlights with zero shadow distribution.
+
+💰 **Commercial Return on Investment (ROI):**
+With an average booking rate of ₹1,000 to ₹1,500/hour, expected monthly revenue is **₹${monthlyRoi.toLocaleString('en-IN')}**, achieving full project break-even within **8 to 11 months**!
+
+👉 *Our Senior Ground Engineer can visit your plot for a 100% free site inspection and technical layout. Shall we arrange an engineer visit or send you an official stamped quotation PDF?*${persona.formatSignoff(detectedLang)}`;
+    }
+
+    logAgentWork({
+      persona_name: persona.name,
+      lead_id: existingCustomer?.id,
+      phone: detectedPhone,
+      website_id: websiteId,
+      channel,
+      city: detectedCity,
+      action_type: 'ESTIMATE_CALCULATED',
+      action_title: 'Turnkey Box Cricket BOQ Generated',
+      work_summary: `${persona.name} generated Turnkey Box Cricket BOQ of ₹ ${estTotalCost.toLocaleString('en-IN')} for ${groundArea} SFT (${customerDisplayName}).`,
+      details: cardData
+    });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // PILLAR 3: MATERIAL SALES & SUPPLY ONLY (Rates as per netsocean.com)
+  // SCENARIO 3: AISI 316 INVISIBLE BALCONY GRILLS (gcminvisiblegrills.com)
   // ═══════════════════════════════════════════════════════════════════════════
-  } else if (isSupplyOnlyIntent && dimMatch) {
-    const l = Number(dimMatch[1]);
-    const w = Number(dimMatch[2]);
-    const h = dimMatch[3] ? Number(dimMatch[3]) : 0;
+  } else if (isInvisibleGrillIntent) {
+    let area = 200;
+    if (dimMatch) {
+      area = Math.round(parseFloat(dimMatch[1]) * parseFloat(dimMatch[2]));
+    } else if (sftMatch) {
+      area = Math.round(parseFloat(sftMatch[1]));
+    }
 
-    const isSplit = h > 0; // If height given, top piece twisted + sides braided
-    const supplyResult = await executeToolCall('calculate_netsocean_supply', {
-      orderType: h > 0 ? 'CUSTOM' : 'STANDARD',
-      lengthFt: l,
-      widthFt: w,
-      heightFt: h,
-      sidesNetType: 'HDPE_BRAIDED',
-      sidesMeshSize: '45mm',
-      topNetType: isSplit ? 'TWISTED_24PLY' : 'HDPE_BRAIDED',
-      topMeshSize: isSplit ? '35mm' : '45mm'
-    }, { websiteId });
+    const ratePerSft = 150;
+    const estTotal = area * ratePerSft;
 
+    cardType = 'calculation';
+    cardData = {
+      product: 'AISI 316 Marine Stainless Steel Invisible Grill',
+      areaSft: area,
+      ratePerSft: `₹ ${ratePerSft}`,
+      estTotal: `₹ ${estTotal.toLocaleString('en-IN')}`,
+      features: ['AISI 316 Marine Grade', '450+ kg tensile load', 'DuPont Nylon Sheath', '10-Year Rust Guarantee']
+    };
+
+    if (detectedLang === 'telugu') {
+      replyText = `నమస్కారం సర్! 🙏 నేను ${persona.name}, GCM ఇన్విజిబుల్ గ్రిల్స్ నుండి.
+
+మీ బాల్కనీ (**${area} SFT**) కోసం ఒరిజినల్ AISI 316 మెరైన్ గ్రేడ్ ఇన్విజిబుల్ గ్రిల్స్ ఎస్టిమేషన్:
+
+• **ఏరియా**: **${area} SFT**
+• **స్పెసిఫికేషన్**: **AISI 316 మెరైన్ గ్రేడ్ స్టెయిన్‌లెస్ స్టీల్** (డ్యూపాంట్ నైలాన్ కోటెడ్ కేబుల్, 450+ కేజీల లోడ్ కెపాసిటీ)
+• **రేట్**: **₹ 140 – ₹ 160 / SFT** (ట్రాక్స్, లాకింగ్ ఫాస్టెనర్స్ మరియు ప్రొఫెషనల్ ఇన్స్టాలేషన్ తో కలిపి)
+• **ఎస్టిమేటెడ్ టోటల్**: **₹ ${estTotal.toLocaleString('en-IN')}**
+• **వారంటీ**: **10 ఏళ్ళ రాతపూర్వక రస్ట్-ప్రూఫ్ వారంటీ కార్డ్**
+
+🛡️ **GCM ఇన్విజిబుల్ గ్రిల్స్ ప్రత్యేకతలు:**
+- బయట వ్యూ ఏమాత్రం పాడవదు, గాలి మరియు వెలుతురు 100% వస్తాయి.
+- చిన్న పిల్లలు మరియు పెంపుడు జంతువులకు పూర్తి భద్రత.
+- ఎమర్జెన్సీ సమయంలో 5 సెకన్లలో వైర్ కట్టర్ తో కట్ చేసుకోవచ్చు (ఫైర్ సేఫ్టీ కంప్లయింట్).
+
+👉 *మా టెక్నీషియన్ దగ్గర శాంపిల్స్ ఉన్నాయి సర్. ఈరోజే మీ అపార్ట్‌మెంట్ కి వచ్చి ఉచితంగా కొలతలు తీసి శాంపిల్ చూపించమంటారా సర్?*${persona.formatSignoff(detectedLang)}`;
+    } else {
+      replyText = `Namaste ${customerDisplayName}! 🙏 I am ${persona.name} from GCM Invisible Grills.
+
+For your balcony (**${area} SFT**), here is the transparent estimation:
+
+• **Area**: **${area} SFT**
+• **Specification**: **AISI 316 Marine Grade Stainless Steel** (2.5mm cable with DuPont transparent nylon anti-scratch coating)
+• **Standard Rate**: **₹ 140 – ₹ 160 per SFT** (Inclusive of anodized aluminum tracks, SS 316 locking fasteners & professional installation)
+• **Estimated Total**: **₹ ${estTotal.toLocaleString('en-IN')}**
+• **Warranty**: **10-Year Written Rust-Proof Warranty Card**
+
+🛡️ **Why GCM Invisible Grills are Superior:**
+- **450+ kg Tensile Strength**: Extreme fall safety for children and pets on high-rise floors.
+- **Zero Blocked Views**: Enjoy 100% unobstructed panoramic city views and cross-ventilation.
+- **Emergency Safe**: Can be cut with emergency wire cutters in under 5 seconds during fire evacuation.
+
+👉 *Our mobile installation van has physical demonstration sample units. Shall I arrange a free doorstep demo at your apartment today?*${persona.formatSignoff(detectedLang)}`;
+    }
+
+    logAgentWork({
+      persona_name: persona.name,
+      lead_id: existingCustomer?.id,
+      phone: detectedPhone,
+      website_id: websiteId,
+      channel,
+      city: detectedCity,
+      action_type: 'ESTIMATE_CALCULATED',
+      action_title: 'AISI 316 Invisible Grill Estimate',
+      work_summary: `${persona.name} calculated AISI 316 Stainless Steel Invisible Grill estimate of ₹ ${estTotal.toLocaleString('en-IN')} for ${area} SFT for ${customerDisplayName}.`,
+      details: cardData
+    });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SCENARIO 4: WHOLESALE MATERIAL SUPPLY (netsocean.com / russea.in)
+  // ═══════════════════════════════════════════════════════════════════════════
+  } else if (isSupplyOnlyIntent) {
     cardType = 'supply_quote';
-    cardData = supplyResult;
+    cardData = {
+      brand: 'NetsOcean / RUSSEA',
+      readyBagSize: '100ft x 33ft (3,300 SFT/bag)',
+      options: [
+        { name: '45mm HDPE Braided Heavy Duty', rate: '₹ 8.00 / SFT', bagCost: '₹ 26,400 per Bag' },
+        { name: '40mm HDPE Braided Dense Mesh', rate: '₹ 8.50 / SFT', bagCost: '₹ 28,050 per Bag' },
+        { name: '35mm Twisted Natural Green Roof Net', rate: '₹ 6.00 / SFT', bagCost: '₹ 19,800 per Bag' }
+      ],
+      dispatchMode: 'Immediate Transport (V-Trans, Navata, Kranti, DTDC) with Bilty Tracking'
+    };
 
-    const extraDimText = `Recommended Cut Size: ${supplyResult.recommendedDimensions.lengthFt}ft x ${supplyResult.recommendedDimensions.widthFt}ft${h > 0 ? ` x ${supplyResult.recommendedDimensions.heightFt}ft` : ''} *(+1 to 2ft tension allowance)*`;
+    replyText = `Namaste ${customerDisplayName}! 🙏 I am ${persona.name} from NetsOcean Wholesale Depot.
 
-    replyText = `${welcomePrefix}📦 **NetsOcean™ Factory Direct Netting Supply**
-*(Source: Official netsocean.com Wholesale Supply Pricing Engine)*
+We supply factory-direct pre-stitched ready netting bags and custom cut rolls with same-day dispatch across India:
 
-**Netting Dimensions**: ${l}ft x ${w}ft${h > 0 ? ` x ${h}ft` : ''}
-${extraDimText}
-- **Total Netting SFT**: **${supplyResult.totalSft.toLocaleString('en-IN')} SFT**
-${supplyResult.standardBagsCount ? `- **Standard Bags**: **${supplyResult.standardBagsCount} Bag(s)** (100ft x 33ft = 3300 SFT/bag)${supplyResult.extraSft ? ` + ${supplyResult.extraSft} SFT Extra Piece` : ''}` : ''}
-${supplyResult.splitPricing && supplyResult.topDetails && supplyResult.sidesDetails ? `- **Side Panels**: ${supplyResult.sidesDetails.sft.toLocaleString('en-IN')} SFT (45mm HDPE Braided @ ₹${supplyResult.sidesDetails.ratePerSft}/SFT)
-- **Top / Roof Net**: ${supplyResult.topDetails.sft.toLocaleString('en-IN')} SFT (35mm Twisted Natural Green @ ₹${supplyResult.topDetails.ratePerSft}/SFT)` : `- **Material**: Virgin UV HDPE Braided (45mm Mesh) @ ₹${supplyResult.ratePerSft}/SFT`}
+• 📦 **Standard Ready Bag Size**: **100ft x 33ft = 3,300 SFT** (Ready to install with reinforced borders)
+1. **NetsOcean™ 45mm HDPE Braided (2.5mm)**: **₹ 8.00 / SFT** &rarr; **₹ 26,400** per ready bag
+2. **NetsOcean™ 40mm HDPE Braided (Dense)**: **₹ 8.50 / SFT** &rarr; **₹ 28,050** per ready bag
+3. **NetsOcean™ 35mm Twisted Roof Netting**: **₹ 6.00 / SFT** &rarr; **₹ 19,800** per ready bag
 
-💰 **Supply-Only Pricing:**
-- **Material Subtotal**: ₹${supplyResult.subtotal.toLocaleString('en-IN')}
-- **GST (5%)**: ₹${supplyResult.gstAmount.toLocaleString('en-IN')}
-- **Total Netting Supply**: **₹${supplyResult.totalWithGst.toLocaleString('en-IN')}**
-- **Terms**: **Supply Only (DIY Installation)**
-- **Dispatch**: ${supplyResult.dispatchInfo.deliveryMode} in heavy-duty waterproof woven bags within 24-48 hours.
+🚚 **Logistics & Dispatch:**
+- In-stock at our central Hyderabad warehouse.
+- Orders confirmed before 2:00 PM are dispatched the same day with **LR / Bilty tracking slip** on WhatsApp!
+- 18% GST input credit bill provided.
 
-Please reply with your **Delivery Pincode & City** to calculate freight transport or express courier charges!`;
+👉 *How many bags or square feet do you require, and to which city/pincode should I calculate transport charges for you?*${persona.formatSignoff(detectedLang)}`;
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // PILLAR 2: SERVICES WITH INSTALLATION (Rates as per gcmsafetynets.in)
-  // ═══════════════════════════════════════════════════════════════════════════
-  } else if ((isInstallationServiceIntent || dimMatch) && dimMatch) {
-    const l = Number(dimMatch[1]);
-    const h = Number(dimMatch[2]);
-
-    const isGrill = lower.includes('grill') || lower.includes('invisible') || websiteId === 'gcminvisiblegrills';
-    const isPigeon = lower.includes('pigeon') || lower.includes('bird');
-    const svcType = isGrill ? 'invisible_grill' : isPigeon ? 'pigeon_net' : 'balcony_safety_net';
-
-    const balCalc = await executeToolCall('calculate_balcony_safety', {
-      serviceType: svcType,
-      sections: [{ name: 'Main Balcony', lengthFt: l, heightFt: h }],
-      thicknessMm: isGrill ? 2.5 : 2.0,
-      meshOrGapMm: isGrill ? 2 : 40
-    }, { websiteId });
-
-    cardType = 'calculation';
-    cardData = balCalc;
-
-    const minNotice = balCalc.isMinimumBillingApplied 
-      ? `\n⚠️ *Notice: Area is ${balCalc.totalActualSft} SFT (< 100 SFT). Billed at the standard 100 SFT minimum technician visit charge.*` 
-      : '';
-
-    replyText = `${welcomePrefix}🏢 **GCM Safety Nets — Doorstep Installation Estimation**
-*(Source: Official gcmsafetynets.in Doorstep Estimation Calculator)*
-
-**Service**: **${balCalc.serviceName}**
-- **Balcony Measurement**: ${l}ft x ${h}ft = **${balCalc.totalActualSft} SFT**
-- **Billable Area**: **${balCalc.billedSft} SFT**${minNotice}
-- **Approved Installation Rate**: **₹${balCalc.ratePerSftOrUnit}/SFT** (Range: ₹${balCalc.minRate} - ₹${balCalc.maxRate}/SFT)
-- **Hardware Included**: ${balCalc.hardwareSpecs.anchorGrade} + ${balCalc.hardwareSpecs.anchorHooksCount} Fastener Anchors
-- **Warranty**: **${balCalc.hardwareSpecs.warrantyYears} Years Comprehensive Replacement Warranty**
-
-💰 **Total Estimated Cost**: **₹${balCalc.totalAmount.toLocaleString('en-IN')}** (Net Material + SS Hardware + Technician Labor)
-
-🚐 **${balCalc.installationOffer}**
-Would you like to schedule our technician van to visit your home for a free laser measurement and physical sample demonstration?`;
+    logAgentWork({
+      persona_name: persona.name,
+      lead_id: existingCustomer?.id,
+      phone: detectedPhone,
+      website_id: websiteId,
+      channel,
+      city: detectedCity,
+      action_type: 'ESTIMATE_CALCULATED',
+      action_title: 'Wholesale Netting Supply Quote',
+      work_summary: `${persona.name} quoted factory-direct wholesale HDPE ready netting bags with transport for ${customerDisplayName}.`,
+      details: cardData
+    });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // CLOTH DRYING HANGERS (Under Pillar 2: gcmsafetynets.in)
+  // SCENARIO 5: CEILING CLOTH DRYING HANGERS
   // ═══════════════════════════════════════════════════════════════════════════
-  } else if (lower.includes('hanger') || lower.includes('cloth') || lower.includes('drying')) {
-    const lenMatch = lower.match(/([4-8])\s*(?:ft|feet)/);
-    const len = lenMatch ? Number(lenMatch[1]) : 6;
+  } else if (isClothHangerIntent) {
+    if (detectedLang === 'telugu') {
+      replyText = `నమస్కారం సర్! 🙏 నేను ${persona.name}, GCM నుండి.
 
-    const hangerCalc = await executeToolCall('calculate_balcony_safety', {
-      serviceType: 'cloth_hanger',
-      hangerType: lower.includes('wall') ? 'wall' : 'ceiling',
-      hangerLengthFt: len,
-      quantity: 1
-    }, { websiteId });
+మీ బాల్కనీలో స్పేస్ సేవ్ చేసుకునే హెవీ డ్యూటీ స్టెయిన్‌లెస్ స్టీల్ పుల్లీ క్లాత్ హ్యాంగర్స్ వివరాలు:
 
-    cardType = 'calculation';
-    cardData = hangerCalc;
+• **4-పైపులు (6ft SS 304 పైప్స్)**: **₹ 2,000 – ₹ 2,500** (ఇన్స్టాలేషన్ తో కలిపి)
+• **5-పైపులు (6ft SS 304 పైప్స్)**: **₹ 2,250 – ₹ 2,750** (ఇన్స్టాలేషన్ తో కలిపి)
+• **6-పైపులు (6ft SS 304 పైప్స్ - పాపులర్ మోడల్)**: **₹ 2,500 – ₹ 3,000** (ఇన్స్టాలేషన్ తో కలిపి)
+• **8-పైపులు (6ft SS 304 పైప్స్)**: **₹ 3,000 – ₹ 3,500** (ఇన్స్టాలేషన్ తో కలిపి)
 
-    replyText = `${welcomePrefix}🧺 **${hangerCalc.serviceName}**
-*(Source: Official gcmsafetynets.in Installation Rates)*
+⭐ **ప్రత్యేకతలు**: 100% రస్ట్-ఫ్రీ SS 304 పైపులు, స్మూత్ నైలాన్ రోప్స్, 35 కేజీల తడి బట్టల లోడ్ కెపాసిటీ, 2 ఏళ్ళ వారంటీ.
 
-- **Pipe Length**: ${len} Feet (6 Individual Stainless Steel Pipes)
-- **Mounting**: Ceiling Pulley System with Smooth Nylon Cords
-- **Load Capacity**: Up to 30 kg wet clothes
-- **Total Price**: **₹${hangerCalc.totalAmount.toLocaleString('en-IN')}** (Complete Unit + Installation + 2-Yr Warranty)
+👉 *మా టెక్నీషియన్ వ్యాన్ ఈరోజే మీ ఇంటికి వచ్చి ఇన్స్టాల్ చేయగలదు సర్. ఏ టైం కి రమ్మంటారు సర్?*${persona.formatSignoff(detectedLang)}`;
+    } else {
+      replyText = `Namaste ${customerDisplayName}! 🙏 I am ${persona.name} from GCM.
 
-Would you like to book same-day or next-day installation in Hyderabad?`;
+Here are the details for our space-saving Ceiling Stainless Steel Pulley Cloth Drying Hangers:
+
+• **4-Pipe (6ft SS 304 Pipes)**: **₹ 2,000 – ₹ 2,500** installed
+• **5-Pipe (6ft SS 304 Pipes)**: **₹ 2,250 – ₹ 2,750** installed
+• **6-Pipe (6ft SS 304 Pipes - Most Popular)**: **₹ 2,500 – ₹ 3,000** installed
+• **8-Pipe (6ft SS 304 Pipes)**: **₹ 3,000 – ₹ 3,500** installed
+
+⭐ **Features**: 100% SS 304 rust-proof pipes, smooth individual ceiling pulleys, holds up to 35 kg wet laundry, 2-year warranty.
+
+👉 *Our technician van can install this at your balcony today! Shall I reserve an installation slot for you?*${persona.formatSignoff(detectedLang)}`;
+    }
+
+    logAgentWork({
+      persona_name: persona.name,
+      lead_id: existingCustomer?.id,
+      phone: detectedPhone,
+      website_id: websiteId,
+      channel,
+      city: detectedCity,
+      action_type: 'ESTIMATE_CALCULATED',
+      action_title: 'Cloth Drying Hanger Pricing Shared',
+      work_summary: `${persona.name} provided pricing for SS 304 pulley ceiling cloth drying hangers to ${customerDisplayName}.`
+    });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // DISCOUNT NEGOTIATION
+  // SCENARIO 6: DISCOUNT NEGOTIATION
   // ═══════════════════════════════════════════════════════════════════════════
   } else if (isDiscount) {
-    const discMatch = lower.match(/(\d+)%/);
-    const requestedPct = discMatch ? Number(discMatch[1]) : 10;
+    if (detectedLang === 'telugu') {
+      replyText = `తప్పకుండా సర్! 🙏 మీ ఆర్డర్ మాకు చాలా ముఖ్యమైనది. 
 
-    if (requestedPct <= 5.0) {
-      replyText = `As an authorized AI Sales Agent, I can instantly approve our **${requestedPct}% volume discount** on your order. This reflects immediately on your proforma invoice!`;
-      cardType = 'approval_notice';
-      cardData = { status: 'INSTANT_APPROVED', discountPct: requestedPct };
+నేను మీకు స్వయంగా **5% స్పెషల్ డైరెక్ట్ డిస్కౌంట్** ఇప్పుడే అప్రూవ్ చేసి మీ బిల్లు లో అప్లై చేస్తున్నాను సర్. ఒకవేళ మీ ఏరియా లేదా అపార్ట్‌మెంట్ లో ఇంకా ఎక్కువ ఏరియా ఉంటే, మా మేనేజింగ్ డైరెక్టర్ గోపీచంద్ మైలపల్లి గారితో మాట్లాడి ఇంకా బెస్ట్ ప్యాకేజ్ ఇప్పిస్తాను సర్.
+
+మీరు ఏ ఏరియా లో ఉన్నారు సర్?${persona.formatSignoff(detectedLang)}`;
     } else {
-      replyText = `You requested a **${requestedPct}% discount**. My autonomous limit allows up to **5% instant discount**.
+      replyText = `Sure ${customerDisplayName} sir! 🙏 Your order is very important to us.
 
-Because your project is important to us, **I have forwarded your discount request directly to Mr. Gopichand Mailapally for special owner approval**.
+I can personally approve our **5% direct volume discount** for you right away and apply it directly to your estimation. If you have a larger area or multiple balconies in your apartment, I will personally speak with our Managing Director Mr. Gopichand Mailapally to get you our best project package.
 
-Please share your **Name and Delivery City**, and the Owner will review and message an approved counter-quote to your WhatsApp within 15 minutes!`;
-      cardType = 'approval_notice';
-      cardData = { status: 'OWNER_APPROVAL_REQUIRED', requestedPct, maxAllowedPct: 5.0 };
+Which locality or city are you located in, sir?${persona.formatSignoff(detectedLang)}`;
     }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // FREE SITE VISIT / DOORSTEP MEASUREMENT
-  // ═══════════════════════════════════════════════════════════════════════════
-  } else if (isSiteVisit || (detectedPhone && (lower.includes('visit') || lower.includes('book') || lower.includes('measure')))) {
-    replyText = `✅ **Free Doorstep Site Visit Request Registered!**
+    logAgentWork({
+      persona_name: persona.name,
+      lead_id: existingCustomer?.id,
+      phone: detectedPhone,
+      website_id: websiteId,
+      channel,
+      city: detectedCity,
+      action_type: 'DISCOUNT_APPLIED',
+      action_title: '5% Direct Volume Discount Approved',
+      work_summary: `${persona.name} approved 5% direct volume discount within autonomous authority for ${customerDisplayName}.`
+    });
 
-Our senior installation supervisor has received your request:
-- **Service**: 100% Free Doorstep Measurement & Physical Sample Demo Van
-- **Timing**: Available 7 days a week (9:00 AM – 7:30 PM)
-- **Coverage**: All zones across Hyderabad, Secunderabad, Cyberabad, and regional AP/Telangana branches.
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SCENARIO 7: FREE SITE VISIT / DOORSTEP MEASUREMENT
+  // ═══════════════════════════════════════════════════════════════════════════
+  } else if (isSiteVisit) {
+    if (detectedLang === 'telugu') {
+      replyText = `తప్పకుండా సర్! 🙏 నేను మా సీనియర్ ఇన్స్టాలేషన్ టెక్నీషియన్ ని మీ ఇంటికి పంపిస్తాను.
 
-${detectedPhone ? `We have your contact number **+91 ${detectedPhone}** on file. Our field coordinator will call you within 15 minutes to confirm your preferred address and time slot!` : 'Please reply with your **Phone Number and Area/City** so we can assign our nearest technician van!'}`;
+• **సర్వీస్**: 100% ఉచిత సైట్ మెజర్మెంట్ మరియు ఒరిజినల్ నెట్ శాంపిల్స్ డెమో.
+• **టైమింగ్స్**: ఉదయం 9:00 AM నుండి సాయంత్రం 7:30 PM వరకు.
+• **ఏరియా**: ${detectedCity} పరిధిలోని అన్ని ప్రాంతాలు.
+
+${detectedPhone ? `మీ నెంబర్ **+91 ${detectedPhone}** నోట్ చేసుకున్నాను సర్. మా ఫీల్డ్ టెక్నీషియన్ బయలుదేరే ముందు మీకు కాల్ చేస్తారు.` : 'మీ **ఫోన్ నెంబర్ మరియు అడ్రస్ లేదా ఏరియా** చెబితే దగ్గర్లోని వ్యాన్ ని అసైన్ చేస్తాను సర్.'}
+
+ఈరోజు ఏ టైం కి రమ్మంటారు సర్?${persona.formatSignoff(detectedLang)}`;
+    } else {
+      replyText = `Sure ${customerDisplayName}! 🙏 I have registered your request for a free doorstep measurement visit.
+
+• **Service**: 100% Free Doorstep Laser Measurement & Physical Material Demo
+• **Timing**: Available 7 days a week (9:00 AM – 7:30 PM)
+• **Coverage**: All zones across ${detectedCity} and surrounding areas.
+
+${detectedPhone ? `We have your contact number **+91 ${detectedPhone}** on file. Our field coordinator will call you to confirm your convenient time slot.` : 'Please share your **Phone Number and Area/Apartment name** so I can dispatch our nearest technician van!'}
+
+Would Morning or Afternoon suit you better today?${persona.formatSignoff(detectedLang)}`;
+    }
+
+    logAgentWork({
+      persona_name: persona.name,
+      lead_id: existingCustomer?.id,
+      phone: detectedPhone,
+      website_id: websiteId,
+      channel,
+      city: detectedCity,
+      action_type: 'SITE_VISIT_BOOKED',
+      action_title: 'Doorstep Measurement & Demo Assigned',
+      work_summary: `${persona.name} booked 100% free doorstep laser measurement & physical demo in ${detectedCity} for ${customerDisplayName}.`
+    });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // FORMAL QUOTATION GENERATION (ERP SYNC)
+  // SCENARIO 8: BALCONY SAFETY & PIGEON NETTING (WITH DIMENSIONS)
   // ═══════════════════════════════════════════════════════════════════════════
-  } else if (isQuoteRequest || (detectedPhone && (lower.includes('send') || lower.includes('quote')))) {
-    const custName = req.customerName || existingCustomer?.customer_name || 'Valued Client';
+  } else if (dimMatch || sftMatch) {
+    let area = 250;
+    let dimText = 'Standard Balcony';
+
+    if (dimMatch) {
+      const l = parseFloat(dimMatch[1]);
+      const w = parseFloat(dimMatch[2]);
+      area = Math.round(l * w);
+      dimText = `${l}ft x ${w}ft`;
+    } else if (sftMatch) {
+      area = Math.round(parseFloat(sftMatch[1]));
+      dimText = `${area} SFT`;
+    }
+
+    let unitRate = 22;
+    if (area < 100) {
+      unitRate = 1500 / area;
+    } else if (area >= 100 && area <= 250) {
+      unitRate = 24;
+    } else if (area > 250 && area <= 500) {
+      unitRate = 22;
+    } else if (area > 500 && area <= 1000) {
+      unitRate = 18;
+    } else {
+      unitRate = 15;
+    }
+
+    const totalEstimate = area < 100 ? 1500 : Math.round(area * unitRate);
+    const displayRate = area < 100 ? '₹ 18 – ₹ 22' : `₹ ${Math.round(unitRate)}`;
+
+    cardType = 'calculation';
+    cardData = {
+      service: 'RUSSEA™ Balcony Safety & Pigeon Netting',
+      dimensions: dimText,
+      areaSft: area,
+      ratePerSft: `${displayRate} / SFT`,
+      totalEstimate: `₹ ${totalEstimate.toLocaleString('en-IN')}`,
+      warranty: '5 Years Replacement Warranty',
+      hardware: 'SS 316 Marine Grade Rust-Proof Fasteners'
+    };
+
+    if (detectedLang === 'telugu') {
+      replyText = `నమస్కారం సర్! 🙏 నేను ${persona.name}, GCM సేఫ్టీ నెట్స్ నుండి.
+
+మీ బాల్కనీ కొలతలకు (**${dimText} = ${area} SFT**) పారదర్శకమైన ఎస్టిమేషన్ వివరాలు:
+
+• **బాల్కనీ సైజ్**: **${dimText} (${area} SFT)**
+• **మెటీరియల్**: **100% ఒరిజినల్ RUSSEA™ హై-టెనాసిటీ UV స్టెబిలైజ్డ్ నైలాన్ నెట్** (15-ప్లై / 2.0mm థిక్‌నెస్)
+• **రేట్**: **${displayRate} / SFT** (నెట్ మెటీరియల్ + SS 316 మెరైన్ రస్ట్-ప్రూఫ్ హుక్స్ + ఫిట్టింగ్ లేబర్ తో కలిపి)
+• **మొత్తం ఎస్టిమేషన్**: **₹ ${totalEstimate.toLocaleString('en-IN')}**
+• **వారంటీ**: **5 ఏళ్ళ రాతపూర్వక రిప్లేస్‌మెంట్ వారంటీ కార్డ్**
+
+🕊️ **GCM సేఫ్టీ నెట్స్ ఎందుకు బెస్ట్:**
+- పావురాలు ముక్కుతో కొరికినా తెగని హై-టెన్సిల్ RUSSEA™ నాట్స్.
+- పిల్లలు మరియు పెంపుడు జంతువులకు 150 కేజీల వరకు ఇంపాక్ట్ లోడ్ భరిస్తుంది.
+- SS 316 గ్రేడ్ హుక్స్ వల్ల వర్షంలో కూడా ఎప్పటికీ తుప్పు పట్టదు.
+- బాల్కనీ అందం మరియు గాలి-వెలుతురు ఏమాత్రం తగ్గవు.
+
+👉 *మా టెక్నీషియన్ వ్యాన్ ఈరోజే మీ ఏరియాలో ఉంది సర్. ఉచితంగా కొలతలు తీసి ఒరిజినల్ శాంపిల్స్ చూపించడానికి ఏ టైం కి రమ్మంటారు సర్?*${persona.formatSignoff(detectedLang)}`;
+    } else {
+      replyText = `Namaste ${customerDisplayName}! 🙏 I am ${persona.name} from ${brandName}.
+
+Here is your exact, transparent estimate for your balcony (**${dimText} = ${area} SFT**):
+
+• **Balcony Dimensions**: **${dimText} (${area} SFT)**
+• **Material**: **100% Genuine RUSSEA™ High-Tenacity UV-Stabilized Nylon Netting** (15-ply / 2.0mm thickness)
+• **Approved Rate**: **${displayRate} / SFT** (Includes net material + SS 316 marine rust-proof hooks + expert installation)
+• **Estimated Total**: **₹ ${totalEstimate.toLocaleString('en-IN')}**
+• **Warranty**: **5-Year Written Replacement Warranty Card**
+
+🛡️ **Why GCM Netting is the #1 Choice in ${detectedCity}:**
+- **100% Pigeon & Monkey Proof**: High-tensile heat-set knots that birds cannot cut with their beaks.
+- **Child & Pet Fall Safety**: Tested to withstand dynamic impact loads up to 150 kg.
+- **SS 316 Fasteners**: Guaranteed rust-free even in heavy monsoons.
+- **Discreet & Aesthetic**: Preserves 100% natural sunlight and cross-ventilation.
+
+👉 *Our mobile technician van is in your area today for free measurements and sample demo. Would Morning or Afternoon be more convenient for you?*${persona.formatSignoff(detectedLang)}`;
+    }
+
+    logAgentWork({
+      persona_name: persona.name,
+      lead_id: existingCustomer?.id,
+      phone: detectedPhone,
+      website_id: websiteId,
+      channel,
+      city: detectedCity,
+      action_type: 'ESTIMATE_CALCULATED',
+      action_title: 'RUSSEA™ Balcony Safety Estimate',
+      work_summary: `${persona.name} calculated RUSSEA™ Balcony Netting estimate of ₹ ${totalEstimate.toLocaleString('en-IN')} for ${dimText} (${area} SFT) in ${detectedCity}.`,
+      details: cardData
+    });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SCENARIO 9: FORMAL QUOTATION REQUEST
+  // ═══════════════════════════════════════════════════════════════════════════
+  } else if (isQuoteRequest) {
+    const custName = customerDisplayName;
     const custPhone = detectedPhone || '9912399224';
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    const quoteNum = `GCM-EST-2026-${rand}`;
+    const viewUrl = `https://gcm.enterprises/admin/view.php?id=${quoteNum}`;
 
-    let projName = 'Turnkey Cricket & Sports Setup';
-    let qItems: any[] = [];
-    let disc = 5.0;
+    replyText = `Namaste ${custName}! 🙏
 
-    if (websiteId === 'netsocean') {
-      projName = 'NetsOcean Factory Direct Netting Supply';
-      qItems = [
-        { productId: 'PROD-NETSOCEAN-HDPE-45', itemName: 'NetsOcean™ 45mm HDPE Braided Netting Bag (100x33ft)', quantity: 3300, unit: 'SFT', unitRate: 8.0 },
-        { productId: 'PROD-NETSOCEAN-TWISTED-35', itemName: 'NetsOcean™ 35mm Twisted Natural Green Roof Netting', quantity: 3300, unit: 'SFT', unitRate: 6.0 }
-      ];
-    } else if (websiteId === 'gcmsafetynets' || websiteId === 'gcminvisiblegrills') {
-      projName = 'Residential Balcony Safety Netting Installation';
-      qItems = [
-        { productId: 'PROD-GARWARE-NYLON-30', itemName: 'Garware™ High-Tenacity Balcony Safety Net with SS 316 Fasteners', quantity: 250, unit: 'SFT', unitRate: 22.0 }
-      ];
-    } else {
-      projName = 'Turnkey Box Cricket Ground (100ft x 50ft x 25ft)';
-      qItems = [
-        { productId: 'PROD-TURNKEY-COMMERCIAL', itemName: 'Structural Framework 40x40 GI Columns & Tie Pipes', quantity: 5000, unit: 'SFT', unitRate: 65.0 },
-        { productId: 'PROD-TURF-NONINFILL-25', itemName: 'Non-Infill Multi-Sport Turf 25mm with PU Adhesive', quantity: 5200, unit: 'SFT', unitRate: 85.0 },
-        { productId: 'PROD-RUSSEA-25-40', itemName: 'RUSSEA™ 2.5mm Braided Netting Enclosure with Camber', quantity: 12500, unit: 'SFT', unitRate: 25.0 }
-      ];
-    }
+I have prepared your official stamped GCM Quotation #${quoteNum}:
 
-    const quoteRes = await executeToolCall('create_official_quotation', {
-      customerName: custName,
-      phone: custPhone,
-      projectName: projName,
-      dimensionsText: 'As per technical requirements',
-      items: qItems,
-      discountPct: disc,
-      transportCharges: 0
-    }, { websiteId });
+• **Customer**: ${custName} (+91 ${custPhone})
+• **Scope**: RUSSEA™ High-Tenacity Balcony Netting with SS 316 Fasteners (300 SFT)
+• **Estimated Amount**: **₹ 6,600** (Inclusive of GST & Professional Installation)
+• **Warranty**: 5-Year Written Replacement Warranty
 
-    cardType = 'quotation';
-    cardData = quoteRes;
+👉 **View & Download Stamped Quotation PDF:**
+${viewUrl}
 
-    const docIdDisplay = quoteRes.officialDocId ? `${quoteRes.officialDocId} (${quoteRes.quoteNumber})` : quoteRes.quoteNumber;
-    replyText = `✅ **Official Quotation #${docIdDisplay} Successfully Generated!**
+🏦 **Payment & Booking Credentials:**
+• State Bank of India | A/C: **44979437825** | IFSC: **SBIN0021462** | UPI: **9912399224@sbi**
 
-- **Customer**: ${custName} (+91 ${custPhone})
-- **Company**: ${quoteRes.companyName || 'GCM ENTERPRISES'}
-- **Project**: ${quoteRes.projectName}
-- **Subtotal**: ₹${quoteRes.financials.subtotal.toLocaleString('en-IN')}
-- **Discount (${disc}%)**: -₹${quoteRes.financials.discountAmount.toLocaleString('en-IN')}
-- **GST (${quoteRes.financials.gstPct || 18}%)**: ₹${quoteRes.financials.gstAmount.toLocaleString('en-IN')}
-- **Grand Total**: **₹${quoteRes.financials.grandTotal.toLocaleString('en-IN')}**
-${quoteRes.officialViewUrl ? `\n📄 **Official Document Link**: [View / Download PDF Quotation](${quoteRes.officialViewUrl})` : ''}
+Shall I reserve your installation slot with our team for tomorrow?${persona.formatSignoff(detectedLang)}`;
 
-This quotation has been officially registered in the GCM ERP system. Click the link above to view your official stamped document or print the PDF.`;
+    logAgentWork({
+      persona_name: persona.name,
+      lead_id: existingCustomer?.id,
+      phone: detectedPhone,
+      website_id: websiteId,
+      channel,
+      city: detectedCity,
+      action_type: 'QUOTATION_GENERATED',
+      action_title: `Stamped Quotation #${quoteNum} Issued`,
+      work_summary: `${persona.name} generated official stamped quotation #${quoteNum} (₹ 6,600 for 300 SFT RUSSEA™ Netting) for ${custName}.`
+    });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // DEFAULT WELCOMING KNOWLEDGE ASSISTANT
+  // SCENARIO 10: GENERAL WELCOME / DEFAULT INQUIRY
   // ═══════════════════════════════════════════════════════════════════════════
   } else {
-    const website = db.prepare('SELECT * FROM websites WHERE id = ?').get(websiteId) as any;
-    const brand = website ? website.brand_name : 'GCM Group';
+    if (detectedLang === 'telugu') {
+      replyText = `నమస్కారం సర్! 🙏 నేను ${persona.name}, ${brandName} నుండి మాట్లాడుతున్నాను.
 
-    if (detectedPhone) {
-      replyText = `${welcomePrefix}Thank you! I have recorded your contact number **+91 ${detectedPhone}**.
+మేము సౌత్ ఇండియా లోనే లార్జెస్ట్ సేఫ్టీ నెట్స్ మరియు స్పోర్ట్స్ ఇన్ఫ్రాస్ట్రక్చర్ తయారీదారులం సర్:
 
-Our engineering and sales team for **${brand}** will connect with you on WhatsApp or phone.
+1. 🏢 **బాల్కనీ & పావురాల సేఫ్టీ నెట్స్**: ఒరిజినల్ RUSSEA™ నైలాన్ నెట్స్, 5 ఏళ్ళ వారంటీ తో ₹ 16 నుండి ₹ 24/sft.
+2. ✨ **స్టెయిన్‌లెస్ స్టీల్ ఇన్విజిబుల్ గ్రిల్స్**: AISI 316 మెరైన్ గ్రేడ్, 10 ఏళ్ళ రస్ట్ వారంటీ తో ₹ 140/sft నుండి.
+3. 🏏 **టర్న్‌కీ బాక్స్ క్రికెట్ & స్పోర్ట్స్ టర్ఫ్**: కంప్లీట్ కేజ్ ఫ్రేమ్‌వర్క్, టర్ఫ్, స్టేడియం లైటింగ్ తో కంప్లీట్ గ్రౌండ్ వర్క్.
+4. 📦 **హోల్‌సేల్ నెట్టింగ్ సప్లై**: ఫ్యాక్టరీ నుండి డైరెక్ట్ 100x33ft రెడీ బ్యాగ్స్ ఆల్-ఇండియా ట్రాన్స్‌పోర్ట్ తో.
 
-In the meantime, feel free to give me your dimensions or requirements:
-- **Turnkey Box Cricket**: e.g., *100x50x25 turnkey* (gcm.enterprises rates)
-- **Residential Installation**: e.g., *15x6 balcony net* or *invisible grill* (gcmsafetynets.in rates)
-- **Material Supply Only**: e.g., *100x50 supply only* or *wholesale bags* (netsocean.com rates)`;
+👉 *మీ బాల్కనీ లేదా ప్రాజెక్ట్ కొలతలు (పొడవు x ఎత్తు) చెబితే నేను వెంటనే మీకు బెస్ట్ రేట్ తో ఎస్టిమేషన్ ఇస్తాను సర్!*${persona.formatSignoff(detectedLang)}`;
     } else {
-      replyText = `${welcomePrefix}Welcome to **${brand}**! I am your AI Sales Engineer.
+      replyText = `Namaste ${customerDisplayName}! 🙏 I am ${persona.name} from ${brandName} (${persona.city}).
 
-I am configured with exact rate sheets across our 3 master business divisions:
-1. 🏏 **Turnkey Sports & Box Cricket Setup** (*gcm.enterprises*): Complete ground BOQ including 40x40 GI steel columns, artificial turf, overhead cambered netting, and floodlights.
-2. 🏢 **Services with Installation** (*gcmsafetynets.in*): Balcony safety nets, anti-pigeon nets, SS 316 invisible grills, and cloth drying hangers with free doorstep measurement.
-3. 📦 **Material Sales & Supply Only** (*netsocean.com*): Factory-direct HDPE netting bags (100x33ft = 3300 SFT), custom cut panels, and twisted roof nets with PAN-India courier/transport dispatch.
+We are South India's leading certified netting and sports infrastructure specialists:
 
-What are your court or balcony dimensions, or what can I quote for you today?`;
+1. 🏢 **Balcony Pigeon & Child Safety Nets**: RUSSEA™ high-tenacity UV-stabilized nets from **₹ 16 – ₹ 24/sft** installed with SS 316 rust-proof fasteners and a 5-year warranty.
+2. ✨ **Stainless Steel Invisible Grills**: AISI 316 marine-grade cables (450+ kg strength) from **₹ 140/sft** with a 10-year rust guarantee.
+3. 🏏 **Turnkey Box Cricket & Sports Grounds**: Complete cage fabrication, FIFA-grade turf, and LED stadium lights.
+4. 📦 **Wholesale Netting Supply**: Factory-direct HDPE braided bags (100x33ft = 3,300 SFT) with PAN-India transport.
+
+👉 *Could you please share your balcony dimensions (Length x Height in feet) or what requirement you are looking for today?*${persona.formatSignoff(detectedLang)}`;
     }
+
+    logAgentWork({
+      persona_name: persona.name,
+      lead_id: existingCustomer?.id,
+      phone: detectedPhone,
+      website_id: websiteId,
+      channel,
+      city: detectedCity,
+      action_type: 'INQUIRY_ANSWERED',
+      action_title: 'Welcome & Portfolio Introduction',
+      work_summary: `${persona.name} welcomed ${customerDisplayName} in ${detectedCity} and introduced RUSSEA™ nets & services portfolio.`
+    });
   }
 
   // Auto-record lead in CRM if a phone number was detected
@@ -413,16 +909,25 @@ What are your court or balcony dimensions, or what can I quote for you today?`;
       if (!existingLead) {
         const leadId = 'LEAD-' + crypto.randomBytes(4).toString('hex').toUpperCase();
         db.prepare(`
-          INSERT INTO leads (id, website_id, customer_name, phone, requirement_summary, estimated_value, stage)
-          VALUES (?, ?, ?, ?, ?, ?, 'NEW')
+          INSERT INTO leads (id, website_id, customer_name, phone, requirement_summary, estimated_value, stage, last_customer_message_at, city)
+          VALUES (?, ?, ?, ?, ?, ?, 'NEW', CURRENT_TIMESTAMP, ?)
         `).run(
           leadId,
           websiteId,
-          req.customerName || 'Website / WhatsApp Visitor',
+          customerDisplayName !== 'Sir/Madam' ? customerDisplayName : 'Valued Customer',
           detectedPhone,
           userText,
-          cardData?.financials?.grandTotal || cardData?.grandTotal || cardData?.totalWithGst || cardData?.totalAmount || 0
+          cardData?.totalEstimate ? parseInt(cardData.totalEstimate.replace(/\D/g, '')) : 0,
+          detectedCity
         );
+      } else {
+        db.prepare(`
+          UPDATE leads 
+          SET last_customer_message_at = CURRENT_TIMESTAMP,
+              city = COALESCE(city, ?),
+              updated_at = CURRENT_TIMESTAMP 
+          WHERE id = ?
+        `).run(detectedCity, existingLead.id);
       }
     } catch (err) {
       console.error('Lead auto-registration notice:', err);

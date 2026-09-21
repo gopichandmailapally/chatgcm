@@ -32,7 +32,7 @@ export function initDatabase() {
     -- 2. Master Products Catalog
     CREATE TABLE IF NOT EXISTS products (
       id TEXT PRIMARY KEY,
-      brand TEXT NOT NULL, -- 'RUSSEA', 'GARWARE', 'GCM', 'NETSOCEAN'
+      brand TEXT NOT NULL, -- 'RUSSEA', 'GCM', 'NETSOCEAN'
       category TEXT NOT NULL, -- 'Cricket Nets', 'Pigeon Nets', 'Invisible Grills', 'Turnkey Sports', etc.
       product_name TEXT NOT NULL,
       material TEXT NOT NULL, -- 'HDPE Braided', 'High-Tenacity Nylon', 'SS 316 Marine Grade'
@@ -209,6 +209,37 @@ export function initDatabase() {
       FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
       FOREIGN KEY (quotation_id) REFERENCES quotations(id) ON DELETE SET NULL
     );
+
+    -- 12. AI Universal Knowledge Cache
+    CREATE TABLE IF NOT EXISTS ai_knowledge_cache (
+      id TEXT PRIMARY KEY,
+      website_id TEXT NOT NULL,
+      category TEXT NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      rates_json TEXT,
+      specifications_json TEXT,
+      source_file TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- 13. Agent Work Tracing & Performance Audit Log
+    CREATE TABLE IF NOT EXISTS agent_work_logs (
+      id TEXT PRIMARY KEY,
+      persona_name TEXT NOT NULL,
+      lead_id TEXT,
+      phone TEXT,
+      website_id TEXT,
+      channel TEXT,
+      city TEXT,
+      action_type TEXT NOT NULL,
+      action_title TEXT NOT NULL,
+      work_summary TEXT NOT NULL,
+      details_json TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_agent_work_logs_persona ON agent_work_logs(persona_name);
+    CREATE INDEX IF NOT EXISTS idx_agent_work_logs_created ON agent_work_logs(created_at DESC);
   `);
 
   // Safe column migrations for existing databases
@@ -221,6 +252,9 @@ export function initDatabase() {
     { table: 'products', col: 'turnkey_project', def: 'INTEGER DEFAULT 0' },
     // Conversations
     { table: 'conversations', col: 'human_takeover', def: 'INTEGER DEFAULT 0' },
+    { table: 'conversations', col: 'snooze_until', def: 'DATETIME' },
+    { table: 'conversations', col: 'scheduled_callback_at', def: 'DATETIME' },
+    { table: 'conversations', col: 'opt_out', def: 'INTEGER DEFAULT 0' },
     // Quotations
     { table: 'quotations', col: 'doc_id', def: 'TEXT' },
     { table: 'quotations', col: 'view_url', def: 'TEXT' },
@@ -244,7 +278,13 @@ export function initDatabase() {
     { table: 'leads', col: 'dispatch_transporter', def: 'TEXT' },
     { table: 'leads', col: 'lr_number', def: 'TEXT' },
     { table: 'leads', col: 'dispatch_date', def: 'TEXT' },
-    { table: 'leads', col: 'human_takeover', def: 'INTEGER DEFAULT 0' }
+    { table: 'leads', col: 'human_takeover', def: 'INTEGER DEFAULT 0' },
+    // Customer Respect & Intelligent Scheduling
+    { table: 'leads', col: 'snooze_until', def: 'DATETIME' },
+    { table: 'leads', col: 'scheduled_callback_at', def: 'DATETIME' },
+    { table: 'leads', col: 'preferred_contact_time', def: 'TEXT' },
+    { table: 'leads', col: 'opt_out', def: 'INTEGER DEFAULT 0' },
+    { table: 'leads', col: 'last_customer_message_at', def: 'DATETIME' }
   ];
 
   for (const mig of schemaMigrations) {
@@ -415,10 +455,10 @@ function seedInitialData() {
 
     // Pillar 2 Products (Doorstep Services with Installation)
     {
-      id: 'PROD-GARWARE-NYLON-30',
-      brand: 'GARWARE',
+      id: 'PROD-RUSSEA-NYLON-30',
+      brand: 'RUSSEA',
       category: 'Balcony Safety Nets',
-      product_name: 'Garware™ High-Tenacity Balcony Safety Net with Installation',
+      product_name: 'RUSSEA™ High-Tenacity Balcony Safety Net with Installation',
       material: '100% Virgin Nylon 6 High Tenacity',
       thickness: '1.2mm / 15-ply',
       mesh_size: '30mm',
@@ -431,10 +471,10 @@ function seedInitialData() {
       turnkey_project: 0
     },
     {
-      id: 'PROD-GARWARE-PIGEON-25',
-      brand: 'GARWARE',
+      id: 'PROD-RUSSEA-PIGEON-25',
+      brand: 'RUSSEA',
       category: 'Pigeon Nets',
-      product_name: 'Garware™ Invisible Monofilament Bird Netting with Installation',
+      product_name: 'RUSSEA™ Invisible Monofilament Bird Netting with Installation',
       material: 'UV Stabilized Monofilament Polyethylene',
       thickness: '0.8mm',
       mesh_size: '25mm',
@@ -450,13 +490,13 @@ function seedInitialData() {
       id: 'PROD-INV-GRILL-SS316',
       brand: 'GCM',
       category: 'Invisible Grills',
-      product_name: 'AISI 316 Marine Grade Balcony Invisible Grill with Installation',
-      material: 'AISI 316 Stainless Steel Wire with DuPont Nylon Sheath',
-      thickness: '2.5mm Wire',
-      mesh_size: '2-inch / 3-inch Gap',
-      color: 'Silver Metallic',
+      product_name: 'GCM™ High-Tensile AISI 316 Marine Stainless Steel Invisible Grill',
+      material: 'AISI 316 Stainless Steel with Transparent DuPont Nylon Sheath',
+      thickness: '2.5mm / 3.0mm',
+      mesh_size: '2-inch / 3-inch gap',
+      color: 'Clear / Metallic',
       unit: 'SFT',
-      specification: '400+ kg tensile breaking load per strand. Rust-proof, clear panoramic view with extreme fall protection.',
+      specification: 'Unobstructed view, 450+ kg tensile load, child fall safety, rust-proof with 10-year warranty.',
       warranty_years: 10,
       requires_site_visit: 1,
       supply_only: 0,
@@ -466,31 +506,31 @@ function seedInitialData() {
       id: 'PROD-CLOTH-HANGER-6P',
       brand: 'GCM',
       category: 'Cloth Drying Hangers',
-      product_name: 'Ceiling Mounted 6-Pipe Stainless Steel Cloth Drying Hanger with Installation',
-      material: 'Heavy-Duty SS 202/304 Tubes with Nylon Pulley Ropes',
-      thickness: '6 Pipes x 6ft',
-      mesh_size: 'N/A',
-      color: 'Polished Silver',
+      product_name: 'GCM™ Ceiling Mounted Pulley Cloth Drying Hanger (6 Pipes)',
+      material: 'Pure SS 304 Stainless Steel Pipes with Nylon Pulley Grid',
+      thickness: '0.5mm pipe wall, 6ft length',
+      mesh_size: '6-pipe system',
+      color: 'Silver Chrome',
       unit: 'UNIT',
-      specification: 'Individual pulley operation. Holds up to 30 kg wet laundry with zero floor space usage. Includes technician installation.',
+      specification: 'Space-saving balcony ceiling drying hanger with independent nylon pull cords.',
       warranty_years: 2,
       requires_site_visit: 1,
       supply_only: 0,
       turnkey_project: 0
     },
 
-    // Pillar 3 Products (Material Sales & Supply Only)
+    // Pillar 3 Products (Supply-Only / Wholesale Bundles - netsocean.com exact catalog)
     {
       id: 'PROD-NETSOCEAN-HDPE-45',
       brand: 'NETSOCEAN',
-      category: 'Supply-Only Netting',
-      product_name: 'NetsOcean™ Standard 45mm HDPE Braided Netting Bag (3300 SFT)',
-      material: 'Virgin UV Stabilized HDPE Braided',
-      thickness: '2.5mm',
-      mesh_size: '45mm',
+      category: 'Wholesale Netting Bundles',
+      product_name: 'NetsOcean™ 2.5mm HDPE Braided 45mm Mesh Net (100x33 ft Bag)',
+      material: 'High-Density Polyethylene (HDPE) Braided UV-Treated',
+      thickness: '2.5mm / 45-ply',
+      mesh_size: '45mm (1.75 inch)',
       color: 'Dark Green',
-      unit: 'SFT',
-      specification: '100ft x 33ft (3,300 SFT/bag) standard ready bag. Factory-direct supply only via courier or V-Trans transport across India.',
+      unit: 'BAG',
+      specification: 'Pre-cut standard wholesale bag: 100 ft length x 33 ft height (3,300 SFT). Zero middleman distributor rates.',
       warranty_years: 5,
       requires_site_visit: 0,
       supply_only: 1,
@@ -499,14 +539,14 @@ function seedInitialData() {
     {
       id: 'PROD-NETSOCEAN-HDPE-40',
       brand: 'NETSOCEAN',
-      category: 'Supply-Only Netting',
-      product_name: 'NetsOcean™ Standard 40mm HDPE Braided Netting Bag (3300 SFT)',
-      material: 'Virgin UV Stabilized HDPE Braided',
-      thickness: '2.5mm',
-      mesh_size: '40mm',
+      category: 'Wholesale Netting Bundles',
+      product_name: 'NetsOcean™ 2.5mm HDPE Braided 40mm Mesh Net (100x33 ft Bag)',
+      material: 'High-Density Polyethylene (HDPE) Braided UV-Treated',
+      thickness: '2.5mm / 45-ply',
+      mesh_size: '40mm (1.5 inch)',
       color: 'Dark Green',
-      unit: 'SFT',
-      specification: '100ft x 33ft standard bag with smaller 40mm dense mesh. Supply-only factory direct.',
+      unit: 'BAG',
+      specification: 'Pre-cut standard wholesale bag: 100 ft length x 33 ft height (3,300 SFT). Heavy cricket boundary and practice cages.',
       warranty_years: 5,
       requires_site_visit: 0,
       supply_only: 1,
@@ -515,15 +555,15 @@ function seedInitialData() {
     {
       id: 'PROD-NETSOCEAN-TWISTED-35',
       brand: 'NETSOCEAN',
-      category: 'Supply-Only Netting',
-      product_name: 'NetsOcean™ Twisted Roof Netting 35mm (Natural Green)',
-      material: '1.5mm / 24-Ply UV Stabilized Twisted Polyethylene',
-      thickness: '1.5mm',
+      category: 'Wholesale Netting Bundles',
+      product_name: 'NetsOcean™ 1.5mm Twisted HDPE 35mm Mesh Overhead Net (100x33 ft Bag)',
+      material: 'Twisted HDPE with Dual UV Inhibitor',
+      thickness: '1.5mm / 24-ply',
       mesh_size: '35mm',
-      color: 'Natural Green',
-      unit: 'SFT',
-      specification: 'Overhead roof netting for box cricket setups. Lightweight, weather-resistant, minimum camber sag.',
-      warranty_years: 3,
+      color: 'Black / Dark Green',
+      unit: 'BAG',
+      specification: 'Lightweight high-durability overhead cage net for top roof netting. 3,300 SFT per bundle.',
+      warranty_years: 5,
       requires_site_visit: 0,
       supply_only: 1,
       turnkey_project: 0
@@ -549,9 +589,9 @@ function seedInitialData() {
     );
   }
 
-  // 3. Approved Pricing Rules Matrix
+  // 3. Pricing Rules
   const insertPrice = db.prepare(`
-    INSERT INTO pricing_rules (id, product_id, customer_type, min_quantity, rate_per_unit, max_ai_discount_pct)
+    INSERT INTO pricing_rules (id, product_id, customer_type, min_quantity, rate_per_unit, max_discount_pct)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
 
@@ -561,8 +601,8 @@ function seedInitialData() {
     { id: 'PR-TURF-RET', prod: 'PROD-TURF-NONINFILL-25', type: 'retail', minQty: 1, rate: 85.0, maxDisc: 5.0 },
 
     // Pillar 2: Installation Services (gcmsafetynets.in)
-    { id: 'PR-GAR-BAL-RET', prod: 'PROD-GARWARE-NYLON-30', type: 'retail', minQty: 1, rate: 22.0, maxDisc: 5.0 },
-    { id: 'PR-GAR-PIG-RET', prod: 'PROD-GARWARE-PIGEON-25', type: 'retail', minQty: 1, rate: 19.0, maxDisc: 5.0 },
+    { id: 'PR-RUS-BAL-RET', prod: 'PROD-RUSSEA-NYLON-30', type: 'retail', minQty: 1, rate: 22.0, maxDisc: 5.0 },
+    { id: 'PR-RUS-PIG-RET', prod: 'PROD-RUSSEA-PIGEON-25', type: 'retail', minQty: 1, rate: 19.0, maxDisc: 5.0 },
     { id: 'PR-INVG-RET', prod: 'PROD-INV-GRILL-SS316', type: 'retail', minQty: 1, rate: 150.0, maxDisc: 5.0 },
     { id: 'PR-CLOTH-RET', prod: 'PROD-CLOTH-HANGER-6P', type: 'retail', minQty: 1, rate: 2750.0, maxDisc: 5.0 },
 
@@ -588,8 +628,8 @@ function seedInitialData() {
   insertInventory.run('INV-NETS40', 'PROD-NETSOCEAN-HDPE-40', 85, 'BAG', 'NetsOcean Central Hub, Hyderabad');
   insertInventory.run('INV-TW35', 'PROD-NETSOCEAN-TWISTED-35', 60, 'BAG', 'NetsOcean Central Hub, Hyderabad');
   insertInventory.run('INV-TURF', 'PROD-TURF-NONINFILL-25', 24, 'ROLL', 'GCM Enterprises Turf Depot');
-  insertInventory.run('INV-GAR-BAL', 'PROD-GARWARE-NYLON-30', 95000, 'SFT', 'GCM Safety Nets Hyderabad Van Depots');
-  insertInventory.run('INV-GAR-PIG', 'PROD-GARWARE-PIGEON-25', 70000, 'SFT', 'GCM Safety Nets Hyderabad Van Depots');
+  insertInventory.run('INV-RUS-BAL', 'PROD-RUSSEA-NYLON-30', 95000, 'SFT', 'GCM Safety Nets Hyderabad Van Depots');
+  insertInventory.run('INV-RUS-PIG', 'PROD-RUSSEA-PIGEON-25', 70000, 'SFT', 'GCM Safety Nets Hyderabad Van Depots');
   insertInventory.run('INV-INVG', 'PROD-INV-GRILL-SS316', 45000, 'SFT', 'GCM Fabrication Unit, Kukatpally');
   insertInventory.run('INV-CLOTH', 'PROD-CLOTH-HANGER-6P', 180, 'UNIT', 'Miyapur Assembly Facility');
 

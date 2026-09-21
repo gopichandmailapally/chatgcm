@@ -118,7 +118,7 @@ export const GCM_TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          productId: { type: 'string', description: 'Product ID or SKU (e.g. PROD-RUSSEA-25-40, PROD-GARWARE-NYLON-30)' },
+          productId: { type: 'string', description: 'Product ID or SKU (e.g. PROD-RUSSEA-25-40, PROD-RUSSEA-NYLON-30)' },
           quantity: { type: 'number', description: 'Quantity in SFT, BAGS, or UNITS' },
           customerType: { type: 'string', enum: ['retail', 'contractor', 'wholesale'], description: 'Customer category' },
           requestedDiscountPct: { type: 'number', description: 'Discount percentage requested by customer' }

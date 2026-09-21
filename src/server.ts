@@ -25,7 +25,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // 3. Static Assets (Command Center Dashboard, Widget JS, Demo)
-const publicDir = path.resolve(process.cwd(), 'public');
+const publicDir = path.resolve("/var/www/chatgcm.in/public");
 app.use(express.static(publicDir));
 
 // 4. API Routes
