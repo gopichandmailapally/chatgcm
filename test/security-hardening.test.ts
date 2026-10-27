@@ -1,15 +1,8 @@
 /**
  * Chat GCM — Automated Security Verification Suite (Phase 1.4)
- * Proves:
- * 1. Unauthenticated admin access is denied (401)
- * 2. Unauthenticated CRM access is denied (401)
- * 3. Master ADMIN_API_KEY grants SUPER_ADMIN access
- * 4. Auditor role has read-only access (mutations denied with 403)
- * 5. Cross-tenant access is denied (403)
- * 6. Customer chat endpoint cannot execute admin actions
- * 7. GCM Bridge fails closed when token is missing
- * 8. Strict gate blocks unapproved quotation dispatch
  */
+
+process.env.NODE_ENV = 'test';
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';

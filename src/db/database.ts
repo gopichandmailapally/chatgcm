@@ -205,6 +205,8 @@ export function initDatabase() {
       proposed_rate REAL,
       status TEXT DEFAULT 'PENDING', -- 'PENDING', 'APPROVED', 'REJECTED'
       owner_comments TEXT,
+      decided_by_device_id TEXT,
+      decided_by_user TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       decided_at DATETIME,
       FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
@@ -388,6 +390,28 @@ export function initDatabase() {
       FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_admin_api_tokens_hash ON admin_api_tokens(token_hash);
+
+    -- 25. Enrolled Authorized Owner Devices (Phase 9 — 4 Dedicated Devices)
+    CREATE TABLE IF NOT EXISTS authorized_devices (
+      device_id TEXT PRIMARY KEY,
+      device_name TEXT NOT NULL,
+      device_type TEXT NOT NULL, -- 'laptop', 'mobile', 'desktop'
+      owner_name TEXT NOT NULL,
+      fingerprint_hash TEXT,
+      registered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_active_at DATETIME,
+      is_active INTEGER DEFAULT 1
+    );
+
+    -- 26. Device Push Notification Subscriptions (Phase 10 — PWA Web Push)
+    CREATE TABLE IF NOT EXISTS device_push_subscriptions (
+      id TEXT PRIMARY KEY,
+      device_id TEXT NOT NULL,
+      endpoint TEXT NOT NULL,
+      keys_json TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (device_id) REFERENCES authorized_devices(device_id) ON DELETE CASCADE
+    );
   `);
 
   // Safe column migrations for existing databases
@@ -448,7 +472,12 @@ export function initDatabase() {
     { table: 'leads', col: 'scheduled_callback_at', def: 'DATETIME' },
     { table: 'leads', col: 'preferred_contact_time', def: 'TEXT' },
     { table: 'leads', col: 'opt_out', def: 'INTEGER DEFAULT 0' },
-    { table: 'leads', col: 'last_customer_message_at', def: 'DATETIME' }
+    { table: 'leads', col: 'last_customer_message_at', def: 'DATETIME' },
+    // Owner Approvals & Payment Verification (Phases 9, 12, 15)
+    { table: 'owner_approvals', col: 'decided_by_device_id', def: 'TEXT' },
+    { table: 'owner_approvals', col: 'decided_by_user', def: 'TEXT' },
+    { table: 'leads', col: 'auto_follow_up_paused', def: 'INTEGER DEFAULT 0' },
+    { table: 'leads', col: 'payment_verification_status', def: 'TEXT DEFAULT "NONE"' }
   ];
 
   for (const mig of schemaMigrations) {
@@ -476,6 +505,9 @@ export function initDatabase() {
   // Ensure all 11+ websites are registered in multi-tenant registry
   ensureAll11WebsitesRegistered();
 
+  // Ensure 4 authorized owner devices are enrolled (Phase 9)
+  ensureAuthorizedOwnerDevices();
+
   // Seed default dataset if websites table is empty
   const websiteCount = db.prepare('SELECT COUNT(*) as count FROM websites').get() as { count: number };
   if (websiteCount.count === 0) {
@@ -493,6 +525,13 @@ export function initDatabase() {
       db.prepare("UPDATE leads SET pillar = 'doorstep_service' WHERE website_id IN ('gcmsafetynets', 'gcminvisiblegrills', 'netsdial') AND pillar IS NULL").run();
     } catch {}
   }
+}
+
+// Ensure schema and migrations are initialized on first load
+try {
+  initDatabase();
+} catch (e: any) {
+  // Ignored if already initialized
 }
 
 function seedInitialData() {
@@ -1161,6 +1200,34 @@ export function ensureAll11WebsitesRegistered() {
       insertOrReplace.run(...w);
     } catch (e: any) {
       console.warn('[WebsiteSync Warning]', e.message);
+    }
+  }
+}
+
+// ── Enrolled Authorized Owner Devices (Phase 9 — 4 Dedicated Devices) ───────
+export function ensureAuthorizedOwnerDevices() {
+  const insertOrIgnore = db.prepare(`
+    INSERT INTO authorized_devices (device_id, device_name, device_type, owner_name, is_active)
+    VALUES (?, ?, ?, ?, 1)
+    ON CONFLICT(device_id) DO UPDATE SET
+      device_name = excluded.device_name,
+      device_type = excluded.device_type,
+      owner_name = excluded.owner_name,
+      is_active = 1
+  `);
+
+  const FOUR_OWNER_DEVICES = [
+    ['owner_win_laptop', 'Windows Laptop (Director Station)', 'laptop', 'Owner / MD'],
+    ['owner_macbook_air', 'MacBook Air (Owner Mobile Station)', 'laptop', 'Owner / MD'],
+    ['owner_pixel_phone', 'Google Pixel Phone (Primary Mobile)', 'mobile', 'Owner / MD'],
+    ['owner_redmi_turbo5', 'Redmi Turbo 5 Phone (Secondary Mobile)', 'mobile', 'Owner / MD']
+  ];
+
+  for (const d of FOUR_OWNER_DEVICES) {
+    try {
+      insertOrIgnore.run(...d);
+    } catch (e: any) {
+      console.warn('[DeviceSync Warning]', e.message);
     }
   }
 }

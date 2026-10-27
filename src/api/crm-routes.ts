@@ -373,7 +373,7 @@ crmRouter.post('/quotations', async (req, res) => {
   }
 });
 
-// ── 12. Owner Approvals ──────────────────────────────────────────────────────
+// ── 12. Owner Approvals & Device Management ──────────────────────────────────
 crmRouter.get('/approvals', (req, res) => {
   try {
     const approvals = listPendingApprovals();
@@ -385,11 +385,30 @@ crmRouter.get('/approvals', (req, res) => {
 
 crmRouter.post('/approvals/:id/decision', (req, res) => {
   try {
-    const { approved, comments } = req.body;
-    const approval = decideOwnerApproval(req.params.id, approved, comments);
+    const { approved, comments, deviceId } = req.body;
+    const headerDeviceId = req.headers['x-device-id'] as string;
+    const effectiveDeviceId = deviceId || headerDeviceId;
+    const approverUser = (req as any).user?.username || 'Owner / Managing Director';
+
+    const approval = decideOwnerApproval(
+      req.params.id, 
+      approved ? 'APPROVED' : 'REJECTED', 
+      comments, 
+      approverUser, 
+      effectiveDeviceId
+    );
     res.json({ success: true, approval });
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+crmRouter.get('/devices', (req, res) => {
+  try {
+    const devices = db.prepare('SELECT device_id, device_name, device_type, owner_name, registered_at, is_active FROM authorized_devices').all();
+    res.json({ success: true, devices });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

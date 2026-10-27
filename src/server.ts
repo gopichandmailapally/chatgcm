@@ -70,9 +70,18 @@ app.use('/api/calc', calculatorRouter);
 app.use('/api/crm', requireAuth, requireTenantScope, crmRouter);
 app.use('/api/admin', requireAuth, adminRouter);
 
-// Root redirect to Admin Dashboard
+// Root landing page (Phase 13: Serves public landing page, not redirecting to /admin/)
 app.get('/', (req, res) => {
-  res.redirect('/admin/');
+  const indexPath = path.join(publicDir, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.json({
+      status: 'online',
+      service: 'Chat GCM — Centralized Multi-Tenant AI Sales & Operations Platform',
+      version: '1.2.0'
+    });
+  }
 });
 
 // Health check

@@ -37,6 +37,8 @@ export type ConversationStage =
   | 'QUOTATION_PENDING_APPROVAL'
   | 'QUOTATION_APPROVED'
   | 'QUOTATION_SENT'
+  | 'CUSTOMER_DECISION_PENDING'
+  | 'PAYMENT_CLAIMED'
   | 'FOLLOW_UP'
   | 'SITE_VISIT_REQUESTED'
   | 'HUMAN_HANDOFF';
@@ -174,8 +176,8 @@ export function mapToCanonicalStage(stage: string): ConversationStage {
  */
 export function canTransition(from: ConversationStage, to: ConversationStage): boolean {
   if (from === to) return true;
-  // Escalation and follow up can be triggered from any state
-  if (to === 'HUMAN_HANDOFF' || to === 'SITE_VISIT_REQUESTED' || to === 'FOLLOW_UP') return true;
+  // Escalation, decision pending, payments, and follow up can be triggered from any state
+  if (to === 'HUMAN_HANDOFF' || to === 'SITE_VISIT_REQUESTED' || to === 'FOLLOW_UP' || to === 'CUSTOMER_DECISION_PENDING' || to === 'PAYMENT_CLAIMED') return true;
 
   switch (from) {
     case 'GREETING':

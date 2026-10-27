@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Staff & Owner Login — Chat GCM</title>
+  <meta name="description" content="Authorized secure access portal for Chat GCM management and owner approvals.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%232563eb'><path d='M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z'/></svg>">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --bg-dark: #0f172a;
+      --card-bg: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --border-color: #334155;
+      --error: #ef4444;
+      --success: #10b981;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    .login-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 440px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+    .brand-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .logo-badge {
+      display: inline-block;
+      background: var(--primary);
+      color: white;
+      font-weight: 700;
+      font-size: 1.25rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 10px;
+      margin-bottom: 0.75rem;
+    }
+    .brand-header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+    .brand-header p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+    }
+    .device-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(37, 99, 235, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      color: var(--accent);
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      width: 100%;
+      justify-content: center;
+    }
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 0.5rem;
+    }
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: #0f172a;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type="text"]:focus, input[type="password"]:focus {
+      border-color: var(--primary);
+    }
+    .btn-submit {
+      width: 100%;
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.85rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 0.5rem;
+    }
+    .btn-submit:hover {
+      background: var(--primary-dark);
+    }
+    .error-alert {
+      display: none;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      margin-bottom: 1.25rem;
+    }
+    .footer-links {
+      margin-top: 1.75rem;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .footer-links a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .footer-links a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="brand-header">
+      <div class="logo-badge">GCM</div>
+      <h1>Chat GCM Portal</h1>
+      <p>Authorized Commercial Operations & Approvals</p>
+    </div>
+
+    <div class="device-badge">
+      <span>🔒</span> Enrolled Device Verification Active
+    </div>
+
+    <div id="error-alert" class="error-alert"></div>
+
+    <form id="login-form">
+      <div class="form-group">
+        <label for="username">Username / Access Key</label>
+        <input type="text" id="username" name="username" placeholder="Enter username or API key" required autocomplete="username">
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" placeholder="Enter secure password" autocomplete="current-password">
+      </div>
+
+      <button type="submit" id="submit-btn" class="btn-submit">Sign In</button>
+    </form>
+
+    <div class="footer-links">
+      <p><a href="#" id="reset-link">Forgot password or need device re-enrollment?</a></p>
+      <p style="margin-top: 0.5rem;"><a href="/">← Return to Public Homepage</a></p>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('login-form');
+    const errorAlert = document.getElementById('error-alert');
+    const resetLink = document.getElementById('reset-link');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorAlert.style.display = 'none';
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      // Check if entering Master API Key directly
+      if (username.startsWith('GCM_') || username.length > 20) {
+        localStorage.setItem('chatgcm_token', username);
+        localStorage.setItem('adminKey', username);
+        window.location.href = '/admin/';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.token) {
+          localStorage.setItem('chatgcm_token', data.token);
+          localStorage.setItem('adminKey', data.token);
+          localStorage.setItem('userRole', data.role || 'SALES_MANAGER');
+          window.location.href = '/admin/';
+        } else {
+          errorAlert.textContent = data.error || 'Invalid credentials or device not enrolled.';
+          errorAlert.style.display = 'block';
+        }
+      } catch (err) {
+        // Fallback for API key direct entry
+        if (password === '' && username) {
+          localStorage.setItem('chatgcm_token', username);
+          localStorage.setItem('adminKey', username);
+          window.location.href = '/admin/';
+        } else {
+          errorAlert.textContent = 'Connection failure. Please verify network and server status.';
+          errorAlert.style.display = 'block';
+        }
+      }
+    });
+
+    resetLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      alert('For security reasons, password resets and device enrollments must be authorized directly by the Managing Director via enrolled primary station.');
+    });
+  </script>
+</body>
+</html>

@@ -1,11 +1,15 @@
 /**
- * Chat GCM — Master Sales Scenarios & Quality Gates (Phase 9 Verification Suite)
- * Verifies all 40 mandatory business scenarios.
+ * Chat GCM — Master Sales Scenarios & Quality Gates (Phase 19 Verification Suite)
+ * Verifies all 50 mandatory enterprise business scenarios.
  */
+
+process.env.NODE_ENV = 'test';
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { handleSalesConversation } from '../src/ai/sales-consultant.js';
 import { getConversationState, saveConversationState, isProductComparisonQuestion } from '../src/ai/conversation-state.js';
 import {
@@ -19,10 +23,11 @@ import {
 } from '../src/pricing/universal-pricing-engine.js';
 import { calculateClothHanger } from '../src/calculators/cloth-hanger-calculator.js';
 import { createQuotation, generateRequirementSummary, generatePreliminaryEstimate } from '../src/crm/quotation-service.js';
-import { decideOwnerApproval } from '../src/crm/approval-service.js';
+import { decideOwnerApproval, createOwnerApprovalRequest } from '../src/crm/approval-service.js';
+import { calculateNetsOceanSupply, NETSOCEAN_PRICING_SLABS } from '../src/calculators/netsocean-supply-calculator.js';
 import { db } from '../src/db/database.js';
 
-describe('🎯 Phase 9: Complete 40-Scenario Sales Engine Verification Suite', () => {
+describe('🎯 Phase 19: Complete 50-Scenario Sales Engine Verification Suite', () => {
 
   it('1. Greeting once across ten messages (introduction never repeated)', () => {
     const sessionId = 'SES-TEST-01-' + Date.now();
@@ -467,6 +472,160 @@ describe('🎯 Phase 9: Complete 40-Scenario Sales Engine Verification Suite', (
     assert.match(r.replyText, /10-year/i);
     assert.doesNotMatch(r.replyText, /8-year warranty on 2\.5mm/i, 'Must never promise blanket 8-year warranty');
     console.log('   ✅ PASS: Approved warranty terms strictly verified.');
+  });
+
+  it('41. Turnkey box cricket enforces mandatory land leveling rule & BOQ', () => {
+    const sessionId = 'SES-TEST-41-' + Date.now();
+    const r1 = handleSalesConversation({ sessionId, websiteId: 'gcm-enterprises', userText: 'I want to build a turnkey box cricket ground' });
+    assert.match(r1.replyText, /Before we begin the ground setup, the land needs to be properly leveled and ready for installation/i);
+
+    const r2 = handleSalesConversation({ sessionId, websiteId: 'gcm-enterprises', userText: '100 by 60 ground, 20 feet high in Hyderabad' });
+    assert.match(r2.replyText, /Before we begin the ground setup, the land needs to be properly leveled and ready for installation/i);
+
+    const r3 = handleSalesConversation({ sessionId, websiteId: 'gcm-enterprises', userText: 'Yes please proceed with calculation' });
+    assert.match(r3.replyText, /Turnkey Box Cricket BOQ Estimate/i);
+    assert.match(r3.replyText, /Before we begin the ground setup, the land needs to be properly leveled and ready for installation/i);
+    assert.match(r3.replyText, /Structural Steel/i);
+    assert.match(r3.replyText, /Turf Flooring/i);
+    console.log('   ✅ PASS: Turnkey box cricket site leveling rule & BOQ verified.');
+  });
+
+  it('42. Negotiation Model A (standard discount offered on estimate)', () => {
+    const sessionId = 'SES-TEST-42-' + Date.now();
+    // Prepare estimate for pigeon safety net
+    handleSalesConversation({ sessionId, websiteId: 'gcmsafetynets', userText: 'Need balcony safety net 120 sft in Hyderabad 2mm' });
+    handleSalesConversation({ sessionId, websiteId: 'gcmsafetynets', userText: 'Yes proceed with quote' });
+    const r = handleSalesConversation({ sessionId, websiteId: 'gcmsafetynets', userText: 'Can you give any discount?' });
+    assert.match(r.replyText, /authorized direct-discount rate of ₹25\/SFT/i);
+    console.log('   ✅ PASS: Negotiation Model A courtesy/floor discount verified.');
+  });
+
+  it('43. Negotiation below floor triggers owner approval gate', () => {
+    const sessionId = 'SES-TEST-43-' + Date.now();
+    handleSalesConversation({ sessionId, websiteId: 'gcmsafetynets', userText: 'Need balcony safety net 120 sft in Hyderabad 2mm' });
+    handleSalesConversation({ sessionId, websiteId: 'gcmsafetynets', userText: 'Yes proceed with quote' });
+    const r = handleSalesConversation({ sessionId, websiteId: 'gcmsafetynets', userText: 'Can you do for Rs 20 per sft?' });
+    assert.match(r.replyText, /I'll check with my manager whether we can offer a better rate and update you/i);
+    const state = getConversationState(sessionId);
+    assert.strictEqual(state.stage, 'QUOTATION_PENDING_APPROVAL');
+    console.log('   ✅ PASS: Below-floor discount strictly routed to owner approval.');
+  });
+
+  it('44. Customer decision pending rule ("We\'ll decide and let you know")', () => {
+    const sessionId = 'SES-TEST-44-' + Date.now();
+    handleSalesConversation({ sessionId, websiteId: 'gcmsafetynets', userText: 'Hi I need balcony safety nets' });
+    const r = handleSalesConversation({ sessionId, websiteId: 'gcmsafetynets', userText: 'We will decide and let you know' });
+    assert.strictEqual(r.replyText, "Certainly. Take your time, and please let us know whenever you're ready.");
+    const state = getConversationState(sessionId);
+    assert.strictEqual(state.stage, 'CUSTOMER_DECISION_PENDING');
+    console.log('   ✅ PASS: Customer decision pending rule acknowledged respectfully.');
+  });
+
+  it('45. Payment confirmation claim ("I paid ₹5000 via UPI UTR...")', () => {
+    const sessionId = 'SES-TEST-45-' + Date.now();
+    const r = handleSalesConversation({ sessionId, websiteId: 'gcm-enterprises', userText: 'I have paid 5000 advance via UPI UTR 429183921021' });
+    assert.match(r.replyText, /We have received your payment details/i);
+    assert.match(r.replyText, /429183921021/);
+    assert.match(r.replyText, /verifying this with our bank account/i);
+    const state = getConversationState(sessionId);
+    assert.strictEqual(state.stage, 'PAYMENT_CLAIMED');
+    console.log('   ✅ PASS: Payment claim requires bank verification before dispatch.');
+  });
+
+  it('46. 4-Device atomic exactly-once approval check', () => {
+    const leadId = 'LEAD-DEV-' + crypto.randomUUID().slice(0, 8);
+    db.prepare(`
+      INSERT INTO leads (id, website_id, customer_name, phone, city)
+      VALUES (?, 'gcm-enterprises', 'Device Test Client', '9988776655', 'Hyderabad')
+    `).run(leadId);
+
+    const appv = createOwnerApprovalRequest({
+      leadId,
+      reason: '12% Special Project Discount',
+      requestedDiscountPct: 12
+    });
+
+    // Approved by enrolled Device 1 (Windows Laptop)
+    const res1 = decideOwnerApproval(appv.id, 'APPROVED', 'Approved by MD', 'Director', 'owner_win_laptop');
+    assert.strictEqual(res1.status, 'APPROVED');
+    assert.strictEqual(res1.decided_by_device_id, 'owner_win_laptop');
+
+    // Second device (MacBook Air) attempts to decide same approval -> Must throw / fail
+    assert.throws(() => {
+      decideOwnerApproval(appv.id, 'APPROVED', 'Duplicate approval from MacBook', 'Director', 'owner_macbook_air');
+    }, /already processed/i);
+    console.log('   ✅ PASS: 4-Device atomic exactly-once approval enforced.');
+  });
+
+  it('47. Unauthorized device rejection', () => {
+    const leadId = 'LEAD-UNAUTH-' + crypto.randomUUID().slice(0, 8);
+    db.prepare(`
+      INSERT INTO leads (id, website_id, customer_name, phone, city)
+      VALUES (?, 'gcm-enterprises', 'Unauth Test Client', '9988776654', 'Hyderabad')
+    `).run(leadId);
+
+    const appv = createOwnerApprovalRequest({
+      leadId,
+      reason: '8% Discount',
+      requestedDiscountPct: 8
+    });
+
+    // Attempt approval from unrecognized device
+    assert.throws(() => {
+      decideOwnerApproval(appv.id, 'APPROVED', 'Hacker Attempt', 'Attacker', 'rogue_unknown_phone');
+    }, /not an enrolled authorized owner device/i);
+    console.log('   ✅ PASS: Unenrolled device strictly prohibited from approving.');
+  });
+
+  it('48. Public landing page at chatgcm.in serves index.html without redirect', () => {
+    const indexFile = fs.readFileSync(path.join(process.cwd(), 'public', 'index.html'), 'utf8');
+    assert.match(indexFile, /Chat GCM/i);
+    assert.match(indexFile, /Staff \/ Owner Portal/i);
+    assert.match(indexFile, /Conversational Sales Consultant/i);
+    console.log('   ✅ PASS: Public landing page at chatgcm.in verified.');
+  });
+
+  it('49. PWA manifest and service worker availability', () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'public', 'manifest.json'), 'utf8'));
+    assert.strictEqual(manifest.name, 'Chat GCM');
+    assert.strictEqual(manifest.short_name, 'Chat GCM');
+    assert.strictEqual(manifest.display, 'standalone');
+
+    const sw = fs.readFileSync(path.join(process.cwd(), 'public', 'sw.js'), 'utf8');
+    assert.match(sw, /push/);
+    assert.match(sw, /notificationclick/);
+    console.log('   ✅ PASS: PWA manifest and push service worker verified.');
+  });
+
+  it('50. Sister project NetsOcean rate tables 100% untouched', () => {
+    // Test 0-3300 SFT slab (Rate = 8.0)
+    const tier1 = calculateNetsOceanSupply({
+      orderType: 'STANDARD',
+      lengthFt: 80,
+      widthFt: 30,
+      sidesNetType: 'HDPE_BRAIDED',
+      sidesMeshSize: '45mm'
+    });
+    assert.strictEqual(tier1.ratePerSft, 8.0);
+    assert.strictEqual(tier1.totalSft, 2542);
+
+    // Test 3301-6600 SFT slab (Rate = 7.75)
+    const tier2 = calculateNetsOceanSupply({
+      orderType: 'STANDARD',
+      lengthFt: 100,
+      widthFt: 33, // 105 x 36 = 3780 SFT
+      sidesNetType: 'HDPE_BRAIDED',
+      sidesMeshSize: '45mm'
+    });
+    assert.strictEqual(tier2.ratePerSft, 7.75);
+    assert.strictEqual(tier2.standardBagsCount, 1);
+
+    // Verify all baseline NetsOcean slabs preserved 100%
+    assert.strictEqual(NETSOCEAN_PRICING_SLABS.STANDARD_HDPE_45mm[0].rate, 8.0);
+    assert.strictEqual(NETSOCEAN_PRICING_SLABS.STANDARD_HDPE_45mm[1].rate, 7.75);
+    assert.strictEqual(NETSOCEAN_PRICING_SLABS.STANDARD_HDPE_45mm[2].rate, 7.50);
+    assert.strictEqual(NETSOCEAN_PRICING_SLABS.STANDARD_HDPE_45mm[3].rate, 7.25);
+    console.log('   ✅ PASS: Sister project NetsOcean wholesale rates 100% preserved.');
   });
 
 });

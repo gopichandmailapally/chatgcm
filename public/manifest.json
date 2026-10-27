@@ -1,0 +1,18 @@
+{
+  "name": "Chat GCM",
+  "short_name": "Chat GCM",
+  "description": "Centralized Multi-Tenant AI Sales, Estimation & Approval Platform",
+  "start_url": "/admin/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1e293b",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' fill='%232563eb'><rect width='512' height='512' rx='128' fill='%231e293b'/><path d='M384 128H128c-21.2 0-38.4 17.2-38.4 38.4v268.8l76.8-76.8h217.6c21.2 0 38.4-17.2 38.4-38.4V166.4c0-21.2-17.2-38.4-38.4-38.4z' fill='%232563eb'/><text x='256' y='280' font-family='sans-serif' font-size='100' font-weight='bold' fill='white' text-anchor='middle'>GCM</text></svg>",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

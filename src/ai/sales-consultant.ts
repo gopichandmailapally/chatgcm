@@ -141,6 +141,10 @@ export function extractRolls(text: string): number | undefined {
 export function detectProductCategory(text: string): ProductCategory | null {
   const lower = text.toLowerCase();
 
+  if (/(?:turnkey|court\s*construction|box\s*cricket\s*(?:setup|ground|arena|project|court|facility)|complete\s*box\s*cricket|full\s*box\s*cricket)/i.test(lower)) {
+    return "turnkey_project";
+  }
+
   if (/(?:cricket|batting\s*nets?|bowling\s*nets?|pitch\s*nets?|cage\s*nets?|braided\s*nets?|sports\s*nets?|ground\s*nets?|box\s*cricket)/i.test(lower)) {
     return "cricket_net";
   }
@@ -303,6 +307,52 @@ export function handleSalesConversation(input: SalesConsultantInput): SalesConsu
       return { replyText: "Hello! What are your balcony dimensions (Length and Height in feet)?" };
     } else {
       return { replyText: "Hello! How can I assist you with safety nets, cricket netting, grass, or invisible grills today?" };
+    }
+  }
+
+  // 3B. Customer Decision Pending Rule (Phase 15)
+  const isCustomerDeciding = /(?:decide\s*(?:and|&)?\s*let\s*you\s*know|think\s*(?:about\s*it|and\s*get\s*back)|discuss\s*with\s*(?:my\s*)?(?:family|partner|wife|husband|parents)|need\s*some\s*time\s*to\s*decide|will\s*get\s*back\s*to\s*you|alochinchukoni|chepthanu|soch\s*ke|batata\s*hu)/i.test(lower);
+  if (isCustomerDeciding) {
+    state.stage = "CUSTOMER_DECISION_PENDING";
+    saveConversationState(sessionId, state);
+    return {
+      replyText: "Certainly. Take your time, and please let us know whenever you're ready."
+    };
+  }
+
+  // 3C. Payment Confirmation Claim (Phase 12)
+  const isPaymentClaim = /(?:i\s*(?:have\s*)?(?:paid|transferred|sent)|payment\s*(?:done|completed|made)|advance\s*(?:paid|sent|transferred)|transferred\s*(?:the\s*)?money|money\s*sent|here\s*is\s*(?:the\s*)?(?:utr|receipt|proof)|utr\s*[:\s#]*[a-z0-9]+)/i.test(lower) && !/(?:how\s*to\s*pay|mode\s*of\s*payment|payment\s*method)/i.test(lower);
+  if (isPaymentClaim) {
+    const utrMatch = userText.match(/\b(?:utr|ref|transaction\s*id)[:\s#]*([a-zA-Z0-9]{8,25})\b/i);
+    const refStr = utrMatch ? ` (UTR/Ref: ${utrMatch[1]})` : '';
+    state.stage = "PAYMENT_CLAIMED";
+    saveConversationState(sessionId, state);
+    return {
+      replyText: `Thank you! We have received your payment details${refStr}. Our accounts team is verifying this with our bank account. Once confirmed, we will issue your formal receipt and proceed with scheduling.`
+    };
+  }
+
+  // 3D. Pricing Negotiation & Floor Protection (Phase 5)
+  const isBelowFloorRequest = /\b(?:give|do|make\s*it|for)\s*(?:at\s*)?(?:rs\.?|₹)?\s*(1[0-9]|2[0-3])\s*(?:per\s*sft|\/sft)?\b/i.test(lower) || /(?:give|want)\s*(?:1[5-9]|[2-9][0-9])%\s*discount/i.test(lower);
+  const isAskingDiscount = /(?:any\s*discount|can\s*you\s*(?:give\s*)?discount|give\s*(?:some\s*)?discount|reduce\s*(?:the\s*)?(?:price|rate|cost)|kam\s*karo|thaggimpu|any\s*concession|best\s*price|kamti|bargain)/i.test(lower);
+
+  if (isBelowFloorRequest && (state.stage === 'ESTIMATE_PREPARED' || state.active_quote || state.stage === 'REQUIREMENT_CONFIRMATION')) {
+    state.stage = "QUOTATION_PENDING_APPROVAL";
+    saveConversationState(sessionId, state);
+    return {
+      replyText: "I'll check with my manager whether we can offer a better rate and update you."
+    };
+  }
+
+  if (isAskingDiscount && (state.stage === 'ESTIMATE_PREPARED' || state.active_quote)) {
+    if (state.active_product_category === 'pigeon_safety_net') {
+      return {
+        replyText: "We can offer an authorized direct-discount rate of ₹25/SFT for complete installation with SS 316 wire and 5-year warranty. Shall I update your estimate with this rate?"
+      };
+    } else {
+      return {
+        replyText: "We can extend an authorized courtesy discount of 5% on your estimate. Shall I update your quote with this discount?"
+      };
     }
   }
 
@@ -984,6 +1034,103 @@ export function handleSalesConversation(input: SalesConsultantInput): SalesConsu
       replyText: reply,
       cardType: "calculation",
       cardData: calc
+    };
+  }
+
+  // ── 14. CATEGORY: TURNKEY BOX CRICKET & SPORTS FACILITIES (Phase 7) ────────
+  if (state.active_product_category === "turnkey_project") {
+    const dims = extractDimensions(userText);
+    if (!state.confirmed_dimensions) state.confirmed_dimensions = {};
+
+    if (dims.length && dims.width) {
+      state.confirmed_dimensions.length = dims.length;
+      state.confirmed_dimensions.width = dims.width;
+      if (dims.height) state.confirmed_dimensions.height = dims.height;
+    } else if (dims.areaSft) {
+      state.confirmed_dimensions.areaSft = dims.areaSft;
+    }
+
+    const cityMatch = userText.match(/\b(hyderabad|secunderabad|bangalore|bengaluru|chennai|vijayawada|visakhapatnam|vizag|guntur|warangal|pune|mumbai|delhi)\b/i);
+    if (cityMatch) {
+      state.customer_location = cityMatch[1].charAt(0).toUpperCase() + cityMatch[1].slice(1).toLowerCase();
+    }
+
+    // 14A. Missing dimensions
+    if (!state.confirmed_dimensions.length || !state.confirmed_dimensions.width) {
+      state.stage = "REQUIREMENT_COLLECTION";
+      saveConversationState(sessionId, state);
+      return {
+        replyText: "For a complete turnkey box cricket arena, we provide end-to-end execution including civil sub-base (WMM/PCC), heavy-duty structural steel ladder columns, high-tenacity side and roof netting, sports artificial turf, stadium LED floodlights, electrical DB, player access gate, and complete turnkey erection.\n\nBefore we begin the ground setup, the land needs to be properly leveled and ready for installation.\n\nWhat are the planned dimensions of your ground (Length, Width, and Height in feet)?"
+      };
+    }
+
+    // 14B. Missing Height (never assume!)
+    if (!state.confirmed_dimensions.height) {
+      state.stage = "REQUIREMENT_COLLECTION";
+      saveConversationState(sessionId, state);
+      return {
+        replyText: "What is the planned height of your box cricket arena in feet (e.g. 20ft, 25ft, or 30ft)?"
+      };
+    }
+
+    // 14C. Missing Location
+    if (!state.customer_location) {
+      state.stage = "REQUIREMENT_COLLECTION";
+      saveConversationState(sessionId, state);
+      return {
+        replyText: "Which city or area is your proposed box cricket site located in?"
+      };
+    }
+
+    const L = state.confirmed_dimensions.length;
+    const W = state.confirmed_dimensions.width;
+    const H = state.confirmed_dimensions.height;
+    const groundArea = L * W;
+
+    // 14D. Confirmation check
+    const isCustomerConfirming = /^(yes|sure|proceed|ok|okay|calculate|quote|tell\s*me|avunu|sare|ha)\b/i.test(lower);
+    if (!isCustomerConfirming && state.stage !== "REQUIREMENT_CONFIRMATION") {
+      state.stage = "REQUIREMENT_CONFIRMATION";
+      state.profile.customerConfirmed = true;
+      saveConversationState(sessionId, state);
+      return {
+        replyText: `So you are planning a turnkey box cricket facility of ${L}ft x ${W}ft (${groundArea.toLocaleString('en-IN')} SFT footprint) with ${H}ft height in ${state.customer_location}. Before we begin the ground setup, the land needs to be properly leveled and ready for installation. Shall I calculate the complete turnkey BOQ estimate?`
+      };
+    }
+
+    // 14E. Calculation via Turnkey BOQ Engine
+    const boq = calculateTurnkeyBoxCricket({
+      lengthFt: L,
+      widthFt: W,
+      heightFt: H,
+      packageType: 'commercial',
+      roofType: 'light_cable_top',
+      turfType: 'non_infill_turf'
+    });
+
+    state.stage = "ESTIMATE_PREPARED";
+    state.active_quote = boq;
+    saveConversationState(sessionId, state);
+
+    const reply = `Turnkey Box Cricket BOQ Estimate:\n` +
+      `• Project: ${boq.projectName}\n` +
+      `• Ground Footprint: ${groundArea.toLocaleString('en-IN')} SFT (${L}ft x ${W}ft x ${H}ft)\n` +
+      `• Structural Steel: ${boq.structuralSteel.columnCount} Heavy-Duty Ladder Columns (40x40 GI with PU finish)\n` +
+      `• Netting System: ${boq.nettingSpecs.sideNettingSft.toLocaleString('en-IN')} SFT Side Netting + ${boq.nettingSpecs.roofNettingSft.toLocaleString('en-IN')} SFT Overhead Roof Netting\n` +
+      `• Turf Flooring: ${boq.turfSystem.turfAreaSft.toLocaleString('en-IN')} SFT (${boq.turfSystem.rollsRequired} Rolls, Non-Infill Multi-Sport Turf)\n` +
+      `• Stadium Lighting: ${boq.lightingSystem.fixtureCount} Nos 200W Stadium LED Floodlights (${boq.lightingSystem.targetLux})\n` +
+      `• Civil & Prep: Engineered WMM Sub-Base & Perimeter Drainage\n` +
+      `• Effective Rate: ₹${boq.ratePerGroundSft.toFixed(2)}/Ground SFT\n` +
+      `• Subtotal: ₹${boq.subtotal.toLocaleString('en-IN')}\n` +
+      `• GST (18%): ₹${boq.gstAmount.toLocaleString('en-IN')}\n` +
+      `• Grand Total: ₹${boq.grandTotal.toLocaleString('en-IN')}\n` +
+      `• Site Requirement: Before we begin the ground setup, the land needs to be properly leveled and ready for installation.\n\n` +
+      `Would you like to schedule an engineer site evaluation or proceed with this project?`;
+
+    return {
+      replyText: reply,
+      cardType: "calculation",
+      cardData: boq
     };
   }
 

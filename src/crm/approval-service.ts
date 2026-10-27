@@ -47,19 +47,39 @@ export function decideOwnerApproval(
   approvalId: string,
   decision: 'APPROVED' | 'REJECTED',
   comments?: string,
-  approverUser = 'Owner / Managing Director'
+  approverUser = 'Owner / Managing Director',
+  deviceId?: string
 ) {
+  // Phase 9: Check authorized device enrollment if deviceId is provided
+  if (deviceId) {
+    const device = db.prepare('SELECT * FROM authorized_devices WHERE device_id = ? AND is_active = 1').get(deviceId) as any;
+    if (!device) {
+      throw new Error(`Security Exception: Device '${deviceId}' is not an enrolled authorized owner device.`);
+    }
+  }
+
   const approval = db.prepare('SELECT * FROM owner_approvals WHERE id = ?').get(approvalId) as any;
   if (!approval) {
     throw new Error(`Approval request not found: ${approvalId}`);
   }
 
-  // Update owner_approvals record
-  db.prepare(`
+  // Phase 9: Atomic Exactly-Once Execution across all enrolled devices
+  const updateResult = db.prepare(`
     UPDATE owner_approvals 
-    SET status = ?, owner_comments = ?, decided_at = CURRENT_TIMESTAMP 
-    WHERE id = ?
-  `).run(decision, comments || null, approvalId);
+    SET status = ?, 
+        owner_comments = ?, 
+        decided_at = CURRENT_TIMESTAMP,
+        decided_by_device_id = ?,
+        decided_by_user = ?
+    WHERE id = ? AND status = 'PENDING'
+  `).run(decision, comments || null, deviceId || 'PRIMARY_PORTAL', approverUser, approvalId);
+
+  if (updateResult.changes === 0) {
+    const current = db.prepare('SELECT status, decided_at, decided_by_device_id FROM owner_approvals WHERE id = ?').get(approvalId) as any;
+    if (current && current.status !== 'PENDING') {
+      throw new Error(`Approval request already processed: Decision '${current.status}' was already recorded by device '${current.decided_by_device_id || 'Portal'}' at ${current.decided_at}.`);
+    }
+  }
 
   // If attached to a quotation, update quotation status strictly according to state machine
   if (approval.quotation_id) {
