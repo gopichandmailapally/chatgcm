@@ -54,6 +54,9 @@ export interface BagRecommendation {
 }
 
 export interface CricketNetCalculationResult {
+  sideNettingSft?: number;
+  roofNettingSft?: number;
+  totalNettingSft?: number;
   measurementConfirmed: boolean;
   isPoleToPole: boolean;
   requiresOwnerConfirmation: boolean;
@@ -350,7 +353,14 @@ export function calculateCricketNetting(input: CricketNetInput): CricketNetCalcu
         : `Shall I share the official quote?`);
   }
 
+  const stdSideNettingSft = Math.round(2 * (rawL + rawW) * rawH * 1.05);
+  const stdRoofNettingSft = includeTop ? Math.round(rawL * rawW * 1.08) : 0;
+  const stdTotalNettingSft = stdSideNettingSft + stdRoofNettingSft;
+
   return {
+    sideNettingSft: stdSideNettingSft,
+    roofNettingSft: stdRoofNettingSft,
+    totalNettingSft: stdTotalNettingSft,
     measurementConfirmed,
     isPoleToPole,
     requiresOwnerConfirmation,

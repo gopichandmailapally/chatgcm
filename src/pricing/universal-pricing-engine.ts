@@ -1,99 +1,151 @@
 /**
- * Chat GCM — Universal Centralized Pricing & Estimation Engine
+ * Chat GCM — Universal Centralized Pricing & Estimation Engine (2026 Enterprise Edition)
+ * Single Source of Truth across all GCM Websites & Channels.
  * 
- * Single Source of Truth for:
- * 1. Installed Safety Nets (Boundary correction: <100 SFT min charge, exactly 100 SFT = 100 × 101-250 rate, >100 SFT slab)
- * 2. Cricket Nets Braided Bags (2mm & 2.5mm at 40mm & 45mm: Half bag, 1 bag, 2-3 bags, 4-5 bags, 5+ bags, explicit mixed bag policy)
- * 3. 1.5mm Twisted Cricket Nets (500-3300 @ ₹5.00, 3301-5000 @ ₹4.75, 5001-10000 @ ₹4.50, 10001+ @ ₹4.25, +₹0.50 customization, 5% GST)
- * 4. Turf Installation Accessories (Silica Sand ₹8/kg @ 5%, Rubber Granules ₹36/kg @ 5%, SPEB 7 Glue ₹370/L @ 18%, Seaming Tape ₹45/m @ 5%)
- * 5. Unified Turf Estimation (Independent line-item calculation with dedicated units, rates, GSTs & transport)
- * 6. Admin Matrix Management, Effective Dates, Tenant Overrides, Audit Logs & Calculation Previews.
+ * 1. Installed Safety Nets:
+ *    - 5 Approved Qualities: 1.5mm Twisted 30mm, 2mm Braided 45mm, 2mm Braided 40mm, 2.5mm Braided 45mm, 2.5mm Braided 40mm
+ *    - 7 Approved Slabs: Below 100 (fixed min), 100–250, 251–500, 501–2000, 2001–5000, 5001–10000, Above 10000
+ *    - Boundary Rule: Exactly 100 SFT billed at 100–250 SFT rate, NEVER fixed minimum.
+ *    - No unapproved 50mm mesh variants. 1.5mm 30mm is strictly twisted.
+ * 
+ * 2. Invisible Grills:
+ *    - Approved schedule: <60 SFT = ₹10,000 fixed; 60–100 = ₹160; 101–200 = ₹140; 201–300 = ₹130; 301–500 = ₹120; 501–1000 = ₹110; >1000 = ₹100
+ *    - Outside Hyderabad: +₹30/SFT applied to both fixed and slab tiers based on actual SFT.
+ * 
+ * 3. Cricket Braided Bags:
+ *    - Full Bag = 3,300 SFT (100x33ft); Half Bag = 1,650 SFT (50x33ft)
+ *    - Exact Tiers: Half bag, 1 full bag, 2–3 bags, 4–5 bags, Above 5 bags for all 4 variants
+ *    - 5% Supply-only GST.
+ * 
+ * 4. 1.5mm Twisted Cricket Nets:
+ *    - 500–3,300: ₹5.00; 3,301–5,000: ₹4.75; 5,001–10,000: ₹4.50; 10,001+: ₹4.25
+ *    - Customization: ₹0.50/SFT; 5% GST.
+ * 
+ * 5. Artificial Grass & Sports Turf (540 SFT Roll Rule):
+ *    - 1 roll = 540 SFT. Roll quantity = CEILING(Required SFT / 540).
+ *    - Landscape: 25mm ₹24, 35mm ₹28, 40mm ₹32, 50mm ₹36. Discounts: 1 roll ₹0, 2-3 rolls ₹1, 4-6 rolls ₹2, 7-10 rolls ₹3, 11+ rolls ₹4.
+ *    - Sports: 15mm 5500 ₹85, 30mm 13500 ₹85, 50mm 12000 ₹80, 50mm 14000 ₹85, 50mm 16000 ₹92, 50mm 18000 ₹100. Discounts: 1 roll ₹0, 2-3 rolls ₹2, 4-6 rolls ₹4, 7-10 rolls ₹6, 11+ rolls ₹8.
+ *    - Material Supply GST: 5%.
+ * 
+ * 6. Turf Accessories:
+ *    - Silica Sand ₹8/kg (5% GST), Rubber Granules ₹36/kg (5% GST), SPEB 7 Glue ₹370/L (18% GST), Seaming Tape ₹45/m (5% GST).
  */
 
 import { db } from '../db/database.js';
+import { calculateInvisibleGrills, type InvisibleGrillInput, type InvisibleGrillResult } from '../calculators/invisible-grill-calculator.js';
+import { calculateClothHanger, type ClothHangerInput, type ClothHangerResult } from '../calculators/cloth-hanger-calculator.js';
+
+export { calculateInvisibleGrills, calculateClothHanger };
+export type { InvisibleGrillInput, InvisibleGrillResult, ClothHangerInput, ClothHangerResult };
+
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 1. INSTALLED SAFETY NETS (SECTION 1)
 // ═════════════════════════════════════════════════════════════════════════════
 
+export type InstalledNetQualityId =
+  | '1.5mm_30mm'
+  | '2.0mm_45mm'
+  | '2.0mm_40mm'
+  | '2.5mm_45mm'
+  | '2.5mm_40mm';
+
 export interface InstalledNetQuality {
-  id: string;
+  id: InstalledNetQualityId;
   name: string;
+  materialType: 'twisted' | 'braided';
   thicknessMm: number;
   meshMm: number;
-  minCharge: number; // Applied strictly below 100 SFT
+  minCharge: number; // Below 100 SFT fixed charge
   slabs: {
-    '101-250': { min: number; max: number; standard: number };
-    '251-500': { min: number; max: number; standard: number };
-    '501-1000': { min: number; max: number; standard: number };
-    'above-1000': { min: number; max: number; standard: number };
+    '100-250': number;
+    '251-500': number;
+    '501-2000': number;
+    '2001-5000': number;
+    '5001-10000': number;
+    'above-10000': number;
   };
 }
 
-export const INSTALLED_SAFETY_NET_QUALITIES: Record<string, InstalledNetQuality> = {
+export const INSTALLED_SAFETY_NET_QUALITIES: Record<InstalledNetQualityId, InstalledNetQuality> = {
   '1.5mm_30mm': {
     id: '1.5mm_30mm',
-    name: '1.5mm Invisible / Monofilament Anti-Pigeon Net (30mm)',
+    name: '1.5mm Twisted HDPE Anti-Pigeon Net (30mm Mesh)',
+    materialType: 'twisted',
     thicknessMm: 1.5,
     meshMm: 30,
     minCharge: 1500,
     slabs: {
-      '101-250': { min: 16, max: 20, standard: 18 },
-      '251-500': { min: 14, max: 18, standard: 16 },
-      '501-1000': { min: 12, max: 16, standard: 14 },
-      'above-1000': { min: 10, max: 14, standard: 12 }
-    }
-  },
-  '2.0mm_40mm': {
-    id: '2.0mm_40mm',
-    name: '2.0mm High-Tenacity RUSSEA™ Balcony Net (40mm)',
-    thicknessMm: 2.0,
-    meshMm: 40,
-    minCharge: 1650,
-    slabs: {
-      '101-250': { min: 24, max: 28, standard: 26 },
-      '251-500': { min: 20, max: 24, standard: 22 },
-      '501-1000': { min: 18, max: 22, standard: 20 },
-      'above-1000': { min: 14, max: 18, standard: 16 }
+      '100-250': 18,
+      '251-500': 15,
+      '501-2000': 12,
+      '2001-5000': 10,
+      '5001-10000': 8,
+      'above-10000': 7
     }
   },
   '2.0mm_45mm': {
     id: '2.0mm_45mm',
-    name: '2.0mm High-Tenacity RUSSEA™ Balcony Net (45mm)',
+    name: '2.0mm High-Tenacity Braided RUSSEA™ Balcony Net (45mm Mesh)',
+    materialType: 'braided',
     thicknessMm: 2.0,
     meshMm: 45,
-    minCharge: 1650,
+    minCharge: 1750,
     slabs: {
-      '101-250': { min: 22, max: 26, standard: 24 },
-      '251-500': { min: 18, max: 22, standard: 20 },
-      '501-1000': { min: 16, max: 20, standard: 18 },
-      'above-1000': { min: 12, max: 16, standard: 14 }
+      '100-250': 20,
+      '251-500': 17,
+      '501-2000': 14,
+      '2001-5000': 12,
+      '5001-10000': 10,
+      'above-10000': 9
     }
   },
-  '2.0mm_50mm': {
-    id: '2.0mm_50mm',
-    name: '2.0mm High-Tenacity RUSSEA™ Balcony Net (50mm)',
+  '2.0mm_40mm': {
+    id: '2.0mm_40mm',
+    name: '2.0mm High-Tenacity Braided RUSSEA™ Balcony Net (40mm Mesh)',
+    materialType: 'braided',
     thicknessMm: 2.0,
-    meshMm: 50,
-    minCharge: 1650,
+    meshMm: 40,
+    minCharge: 1900,
     slabs: {
-      '101-250': { min: 20, max: 24, standard: 22 },
-      '251-500': { min: 16, max: 20, standard: 18 },
-      '501-1000': { min: 14, max: 18, standard: 16 },
-      'above-1000': { min: 10, max: 14, standard: 12 }
+      '100-250': 21,
+      '251-500': 18,
+      '501-2000': 15,
+      '2001-5000': 13,
+      '5001-10000': 11,
+      'above-10000': 10
+    }
+  },
+  '2.5mm_45mm': {
+    id: '2.5mm_45mm',
+    name: '2.5mm Heavy-Duty Braided RUSSEA™ Balcony & Child Safety Net (45mm Mesh)',
+    materialType: 'braided',
+    thicknessMm: 2.5,
+    meshMm: 45,
+    minCharge: 1900,
+    slabs: {
+      '100-250': 21,
+      '251-500': 18,
+      '501-2000': 15,
+      '2001-5000': 13,
+      '5001-10000': 11,
+      'above-10000': 10
     }
   },
   '2.5mm_40mm': {
     id: '2.5mm_40mm',
-    name: '2.5mm Heavy-Duty RUSSEA™ Balcony & Monkey Net (40mm)',
+    name: '2.5mm Heavy-Duty Braided RUSSEA™ Balcony & Monkey Net (40mm Mesh)',
+    materialType: 'braided',
     thicknessMm: 2.5,
     meshMm: 40,
-    minCharge: 1800,
+    minCharge: 2000,
     slabs: {
-      '101-250': { min: 26, max: 30, standard: 28 },
-      '251-500': { min: 22, max: 26, standard: 24 },
-      '501-1000': { min: 20, max: 24, standard: 22 },
-      'above-1000': { min: 16, max: 20, standard: 18 }
+      '100-250': 23,
+      '251-500': 20,
+      '501-2000': 17,
+      '2001-5000': 15,
+      '5001-10000': 13,
+      'above-10000': 12
     }
   }
 };
@@ -104,26 +156,31 @@ export interface InstalledSafetyNetResult {
   actualAreaSft: number;
   billedAreaSft: number;
   isMinimumChargeApplied: boolean;
+  isFixedMinimumApplied?: boolean;
   applicableSlab: string;
   ratePerSft: number;
+  appliedRatePerSft?: number;
   totalAmount: number;
   explanation: string;
 }
 
 /**
- * Calculates Installed Safety Net pricing enforcing strict boundary rules:
- * - Below 100 SFT: Apply previously configured fixed minimum charge.
- * - Exactly 100 SFT: Calculate 100 × applicable 101–250 SFT rate.
- * - Above 100 SFT: Apply appropriate existing quantity slab.
- * Do not apply the fixed minimum charge to exactly 100 SFT.
+ * Calculates Installed Safety Net pricing strictly enforcing boundary rules:
+ * - Below 100 SFT: Apply fixed minimum charge.
+ * - Exactly 100 SFT: Calculate 100 × applicable 100–250 SFT rate. (NEVER minimum charge).
+ * - Above 100 SFT: Apply appropriate quantity slab.
+ * Installed net prices include complete installation.
  */
 export function calculateInstalledSafetyNet(
   qualityKey: string,
   actualAreaSft: number,
-  rateMode: 'min' | 'max' | 'standard' = 'standard'
+  _rateModeOrScope?: any
 ): InstalledSafetyNetResult {
-  const quality = INSTALLED_SAFETY_NET_QUALITIES[qualityKey] || INSTALLED_SAFETY_NET_QUALITIES['2.0mm_45mm'];
-  const sft = Math.round(actualAreaSft);
+  let key = qualityKey as InstalledNetQualityId;
+  // Fallbacks & aliases (reject unknown 50mm, map standard pigeon to 2mm 45mm or 1.5mm 30mm)
+  if (key === ('2.0mm_50mm' as any)) key = '2.0mm_45mm';
+  const quality = INSTALLED_SAFETY_NET_QUALITIES[key] || INSTALLED_SAFETY_NET_QUALITIES['2.0mm_45mm'];
+  const sft = Math.round(actualAreaSft * 100) / 100;
 
   if (sft <= 0) {
     throw new Error('Installation area must be greater than 0 SFT.');
@@ -131,38 +188,47 @@ export function calculateInstalledSafetyNet(
 
   // 1. Below 100 SFT: Fixed Minimum Charge
   if (sft < 100) {
+    const unitRate = Math.round((quality.minCharge / sft) * 100) / 100;
     return {
       qualityId: quality.id,
       qualityName: quality.name,
       actualAreaSft: sft,
-      billedAreaSft: 100,
+      billedAreaSft: sft,
       isMinimumChargeApplied: true,
-      applicableSlab: 'below-100-min-charge',
-      ratePerSft: Math.round((quality.minCharge / sft) * 100) / 100,
+      isFixedMinimumApplied: true,
+      applicableSlab: 'Below 100 SFT (Fixed Minimum)',
+      ratePerSft: unitRate,
+      appliedRatePerSft: unitRate,
       totalAmount: quality.minCharge,
-      explanation: `Below 100 SFT (${sft} SFT): Fixed minimum doorstep visit charge of ₹${quality.minCharge.toLocaleString('en-IN')} applies.`
+      explanation: `Below 100 SFT (${sft} SFT): Fixed minimum doorstep visit and installation charge of ₹${quality.minCharge.toLocaleString('en-IN')} applies.`
     };
   }
 
-  // 2. Exactly 100 SFT or between 100 and 250 SFT: 101–250 SFT Slab Rate
-  let slabKey: '101-250' | '251-500' | '501-1000' | 'above-1000';
+  // 2. Slabs
+  let slabKey: keyof InstalledNetQuality['slabs'];
   let slabLabel = '';
 
   if (sft <= 250) {
-    slabKey = '101-250';
-    slabLabel = sft === 100 ? 'Exactly 100 SFT (billed at 101–250 SFT rate)' : '101–250 SFT';
+    slabKey = '100-250';
+    slabLabel = sft === 100 ? 'Exactly 100 SFT (billed at 100–250 SFT slab rate)' : '100–250 SFT';
   } else if (sft <= 500) {
     slabKey = '251-500';
     slabLabel = '251–500 SFT';
-  } else if (sft <= 1000) {
-    slabKey = '501-1000';
-    slabLabel = '501–1,000 SFT';
+  } else if (sft <= 2000) {
+    slabKey = '501-2000';
+    slabLabel = '501–2,000 SFT';
+  } else if (sft <= 5000) {
+    slabKey = '2001-5000';
+    slabLabel = '2,001–5,000 SFT';
+  } else if (sft <= 10000) {
+    slabKey = '5001-10000';
+    slabLabel = '5,001–10,000 SFT';
   } else {
-    slabKey = 'above-1000';
-    slabLabel = 'Above 1,000 SFT';
+    slabKey = 'above-10000';
+    slabLabel = 'Above 10,000 SFT';
   }
 
-  const rate = quality.slabs[slabKey][rateMode];
+  const rate = quality.slabs[slabKey];
   const totalAmount = Math.round(sft * rate);
 
   return {
@@ -171,17 +237,19 @@ export function calculateInstalledSafetyNet(
     actualAreaSft: sft,
     billedAreaSft: sft,
     isMinimumChargeApplied: false,
-    applicableSlab: slabKey,
+    isFixedMinimumApplied: false,
+    applicableSlab: slabLabel,
     ratePerSft: rate,
+    appliedRatePerSft: rate,
     totalAmount,
     explanation: sft === 100
-      ? `Exactly 100 SFT: Calculated at 100 × ₹${rate}/SFT (${slabLabel}) = ₹${totalAmount.toLocaleString('en-IN')}. Minimum charge NOT applied.`
-      : `${sft} SFT: Calculated at ₹${rate}/SFT (${slabLabel}) = ₹${totalAmount.toLocaleString('en-IN')}.`
+      ? `Exactly 100 SFT: Calculated at 100 × ₹${rate}/SFT (${slabLabel}) = ₹${totalAmount.toLocaleString('en-IN')} with installation included. Fixed minimum charge NOT applied.`
+      : `${sft} SFT: Calculated at ₹${rate}/SFT (${slabLabel}) = ₹${totalAmount.toLocaleString('en-IN')} with installation included.`
   };
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 2. CRICKET NETS — BAG PRICING CORRECTION (SECTION 2)
+// 2. CRICKET NETS — BRAIDED BAG PRICING (SECTION 2)
 // ═════════════════════════════════════════════════════════════════════════════
 
 export const SFT_PER_FULL_BAG = 3300; // 100ft x 33ft
@@ -259,10 +327,6 @@ export interface CricketBraidedOrderResult {
   approvalNote?: string;
 }
 
-/**
- * Calculates cricket braided bag pricing according to the exact master prompt table.
- * Strictly uses configured policy for mixed full/half bag orders. Never assumes rates automatically.
- */
 export function calculateCricketBraidedBags(input: CricketBraidedOrderInput): CricketBraidedOrderResult {
   const { variant, fullBags = 0, halfBags = 0 } = input;
   const policy: MixedBagPricingPolicy = input.mixedBagPolicy || 'SEPARATE_TIERS';
@@ -287,7 +351,6 @@ export function calculateCricketBraidedBags(input: CricketBraidedOrderInput): Cr
   let requiresOwnerApproval = false;
   let approvalNote: string | undefined;
 
-  // Resolve Full Bag Tier Rate
   if (fullBags === 0) {
     fullBagRate = 0;
   } else if (fullBags === 1) {
@@ -304,7 +367,6 @@ export function calculateCricketBraidedBags(input: CricketBraidedOrderInput): Cr
     tierSummary = 'Above 5 Full Bags Tier';
   }
 
-  // Handle Mixed Orders (Both full and half bags present)
   let fullBagsAmount = 0;
   let halfBagsAmount = 0;
 
@@ -315,7 +377,6 @@ export function calculateCricketBraidedBags(input: CricketBraidedOrderInput): Cr
       fullBagsAmount = Math.round(fullBagsSft * fullBagRate * 100) / 100;
       halfBagsAmount = Math.round(halfBagsSft * rates.halfBag * 100) / 100;
     } else if (policy === 'TOTAL_VOLUME_TIER') {
-      // Treat total bags as fractional to determine volume tier
       const totalEquivalentBags = fullBags + (halfBags * 0.5);
       let blendedRate = rates.aboveFiveBags;
       if (totalEquivalentBags <= 1) blendedRate = rates.oneFullBag;
@@ -328,8 +389,6 @@ export function calculateCricketBraidedBags(input: CricketBraidedOrderInput): Cr
       fullBagsAmount = Math.round(fullBagsSft * blendedRate * 100) / 100;
       halfBagsAmount = Math.round(halfBagsSft * blendedRate * 100) / 100;
     } else {
-      // 'SEPARATE_TIERS' (Default Approved Policy):
-      // Full bags receive their volume tier rate; half bags receive the half-bag rate.
       fullBagsAmount = Math.round(fullBagsSft * fullBagRate * 100) / 100;
       halfBagsAmount = Math.round(halfBagsSft * rates.halfBag * 100) / 100;
       tierSummary = `${tierSummary} + Half Bag Tier`;
@@ -338,7 +397,6 @@ export function calculateCricketBraidedBags(input: CricketBraidedOrderInput): Cr
     fullBagsAmount = Math.round(fullBagsSft * fullBagRate * 100) / 100;
     halfBagsAmount = 0;
   } else {
-    // Only half bags
     fullBagsAmount = 0;
     halfBagRate = rates.halfBag;
     halfBagsAmount = Math.round(halfBagsSft * halfBagRate * 100) / 100;
@@ -372,7 +430,7 @@ export function calculateCricketBraidedBags(input: CricketBraidedOrderInput): Cr
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 3. 1.5mm TWISTED CRICKET NETS — BOUNDARY CORRECTION (SECTION 3)
+// 3. 1.5mm TWISTED CRICKET NETS (SECTION 3)
 // ═════════════════════════════════════════════════════════════════════════════
 
 export interface Twisted15CalculationResult {
@@ -383,21 +441,12 @@ export interface Twisted15CalculationResult {
   customizationRatePerSft: number; // Always ₹0.50 / SFT
   customizationAmount: number;
   totalRatePerSft: number; // Base + ₹0.50
-  subtotal: number; // Taxable Supply Value
+  subtotal: number;
   gstPct: number; // 5%
   gstAmount: number;
   grandTotal: number;
 }
 
-/**
- * 1.5mm Twisted Cricket Nets Boundary Calculation:
- * - 500–3,300 SFT: ₹5.00
- * - 3,301–5,000 SFT: ₹4.75
- * - 5,001–10,000 SFT: ₹4.50
- * - 10,001 SFT and above: ₹4.25
- * Customization charge: ₹0.50/SFT additional.
- * GST: 5% on total taxable supply value (material + customization).
- */
 export function calculateTwisted15Netting(sft: number, includeCustomization: boolean = true): Twisted15CalculationResult {
   if (sft < 500) {
     throw new Error('Minimum order quantity for 1.5mm twisted net is 500 SFT.');
@@ -445,7 +494,128 @@ export function calculateTwisted15Netting(sft: number, includeCustomization: boo
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 4. NEW TURF INSTALLATION ACCESSORIES — SUPPLY ONLY (SECTION 4)
+// 4. ARTIFICIAL GRASS & SPORTS TURF (540 SFT ROLL RULE) (SECTION 4)
+// ═════════════════════════════════════════════════════════════════════════════
+
+export const SFT_PER_TURF_ROLL = 540; // 2m x 25m = 50 sqm ≈ 538.2 to 540 SFT standard roll
+
+export const LANDSCAPE_GRASS_RATES: Record<number, number> = {
+  25: 24.0,
+  35: 28.0,
+  40: 32.0,
+  50: 36.0
+};
+
+export const SPORTS_TURF_RATES: Record<string, number> = {
+  '15mm_5500': 85.0,
+  '30mm_13500': 85.0,
+  '50mm_12000': 80.0,
+  '50mm_14000': 85.0,
+  '50mm_16000': 92.0,
+  '50mm_18000': 100.0
+};
+
+export function getLandscapeDiscountPerSft(rolls: number): number {
+  if (rolls <= 1) return 0;
+  if (rolls <= 3) return 1;
+  if (rolls <= 6) return 2;
+  if (rolls <= 10) return 3;
+  return 4;
+}
+
+export function getSportsTurfDiscountPerSft(rolls: number): number {
+  if (rolls <= 1) return 0;
+  if (rolls <= 3) return 2;
+  if (rolls <= 6) return 4;
+  if (rolls <= 10) return 6;
+  return 8;
+}
+
+export interface TurfRollOrderInput {
+  category: 'landscape' | 'sports';
+  variantKey: string; // e.g. "25mm" or "50mm_14000"
+  requiredAreaSft: number;
+  gstRate?: number; // Default 5% for material supply
+}
+
+export interface TurfRollOrderResult {
+  category: 'landscape' | 'sports';
+  variantKey: string;
+  requiredAreaSft: number;
+  rollsQuantity: number;
+  suppliedAreaSft: number;
+  extraMaterialSft: number;
+  baseRatePerSft: number;
+  discountPerSft: number;
+  effectiveRatePerSft: number;
+  subtotal: number;
+  gstPct: number;
+  gstAmount: number;
+  totalWithGst: number;
+  summaryText: string;
+}
+
+export function calculateTurfRollOrder(input: TurfRollOrderInput): TurfRollOrderResult {
+  const { category, variantKey, requiredAreaSft } = input;
+  const gstRate = input.gstRate !== undefined ? input.gstRate : 5.0;
+
+  if (requiredAreaSft <= 0) {
+    throw new Error('Required area must be greater than 0 SFT.');
+  }
+
+  // 1. Roll count using strict ceiling
+  const rollsQuantity = Math.ceil(requiredAreaSft / SFT_PER_TURF_ROLL);
+  const suppliedAreaSft = rollsQuantity * SFT_PER_TURF_ROLL;
+  const extraMaterialSft = suppliedAreaSft - requiredAreaSft;
+
+  // 2. Base rate & discounts
+  let baseRate = 0;
+  let discount = 0;
+
+  if (category === 'landscape') {
+    const mm = parseInt(variantKey.replace('mm', ''), 10);
+    baseRate = LANDSCAPE_GRASS_RATES[mm] || 28.0;
+    discount = getLandscapeDiscountPerSft(rollsQuantity);
+  } else {
+    baseRate = SPORTS_TURF_RATES[variantKey] || 85.0;
+    discount = getSportsTurfDiscountPerSft(rollsQuantity);
+  }
+
+  const effectiveRate = Math.max(1, baseRate - discount);
+  const subtotal = Math.round(suppliedAreaSft * effectiveRate * 100) / 100;
+  const gstAmount = Math.round(subtotal * (gstRate / 100) * 100) / 100;
+  const totalWithGst = Math.round((subtotal + gstAmount) * 100) / 100;
+
+  const summaryText = `Material: ${variantKey} ${category === 'landscape' ? 'Landscape Grass' : 'Sports Turf'}
+Required Area: ${requiredAreaSft} SFT
+Supply Quantity: ${rollsQuantity} Full Roll${rollsQuantity > 1 ? 's' : ''} (540 SFT/roll)
+Supplied Area: ${suppliedAreaSft} SFT (Extra: ${extraMaterialSft} SFT)
+Rate: ₹${effectiveRate}/SFT (Base ₹${baseRate}${discount > 0 ? ` - ₹${discount} volume discount` : ''})
+Material Subtotal: ₹${subtotal.toLocaleString('en-IN')}
+GST (5%): ₹${gstAmount.toLocaleString('en-IN')}
+Total: ₹${totalWithGst.toLocaleString('en-IN')}
+Supply only. Installation/accessories to be confirmed separately.`;
+
+  return {
+    category,
+    variantKey,
+    requiredAreaSft,
+    rollsQuantity,
+    suppliedAreaSft,
+    extraMaterialSft,
+    baseRatePerSft: baseRate,
+    discountPerSft: discount,
+    effectiveRatePerSft: effectiveRate,
+    subtotal,
+    gstPct: gstRate,
+    gstAmount,
+    totalWithGst,
+    summaryText
+  };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 5. TURF INSTALLATION ACCESSORIES (SECTION 5)
 // ═════════════════════════════════════════════════════════════════════════════
 
 export interface TurfAccessoryProduct {
@@ -479,7 +649,7 @@ export const TURF_ACCESSORIES_CATALOG: Record<string, TurfAccessoryProduct> = {
     name: 'SPEB 7 Polyurethane Adhesive Glue',
     unit: 'liter',
     basePrice: 370.0,
-    gstPct: 18.0, // CRITICAL: 18% GST (Never apply 5% to glue)
+    gstPct: 18.0, // Strictly 18% GST for adhesive
     description: 'High-tensile weatherproof polyurethane adhesive for artificial grass seaming. 18% GST.'
   },
   seaming_tape: {
@@ -492,21 +662,7 @@ export const TURF_ACCESSORIES_CATALOG: Record<string, TurfAccessoryProduct> = {
   }
 };
 
-export interface TurfAccessoryLineItem {
-  accessoryKey: 'silica_sand' | 'rubber_granules' | 'speb7_glue' | 'seaming_tape';
-  quantity: number;
-}
-
-export interface TurfAccessoryCalculation {
-  product: TurfAccessoryProduct;
-  quantity: number;
-  subtotal: number;
-  gstPct: number;
-  gstAmount: number;
-  totalWithGst: number;
-}
-
-export function calculateTurfAccessory(key: string, quantity: number): TurfAccessoryCalculation {
+export function calculateTurfAccessory(key: string, quantity: number) {
   const product = TURF_ACCESSORIES_CATALOG[key];
   if (!product) {
     throw new Error(`Unknown turf accessory product: ${key}`);
@@ -530,73 +686,55 @@ export function calculateTurfAccessory(key: string, quantity: number): TurfAcces
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 5. UNIFIED TURF ESTIMATION (SECTION 5)
+// 6. UNIFIED TURF ESTIMATION (SECTION 6)
 // ═════════════════════════════════════════════════════════════════════════════
 
 export interface UnifiedTurfEstimateInput {
   turfSft?: number;
-  turfRatePerSft?: number; // Base rate before GST (default ₹85/sft for non-infill or ₹75 for infill)
-  turfGstPct?: number;     // 18% for artificial grass
+  turfRatePerSft?: number; // Base rate before GST (default ₹85/sft)
+  turfGstPct?: number;     // 5% for artificial grass material supply
   silicaSandKg?: number;
   rubberGranulesKg?: number;
   glueLiters?: number;
   seamingTapeMeters?: number;
   transportCharges?: number;
-  transportGstPct?: number; // 5% for transport/goods transport agency or 0 if flat reimbursement
+  transportGstPct?: number;
 }
 
-export interface UnifiedTurfLineItem {
-  itemCode: string;
-  name: string;
-  unit: string;
-  quantity: number;
-  rate: number;
-  subtotal: number;
-  gstPct: number;
-  gstAmount: number;
-  totalWithGst: number;
-}
+export function calculateUnifiedTurfEstimate(input: UnifiedTurfEstimateInput) {
+  const lineItems: any[] = [];
+  let grandTotal = 0;
+  let totalTaxable = 0;
+  let totalGst = 0;
 
-export interface UnifiedTurfEstimateResult {
-  lineItems: UnifiedTurfLineItem[];
-  subtotal: number;
-  totalGst: number;
-  grandTotal: number;
-  breakdownSummary: string;
-}
+  const turfGst = input.turfGstPct !== undefined ? input.turfGstPct : 5.0; // Approved 5% supply GST
 
-/**
- * Unified Turf Estimation:
- * Calculates turf, accessories, and transportation independently with their own units, rates, and GSTs.
- * Does not automatically add accessories unless requested or approved.
- */
-export function calculateUnifiedTurfEstimate(input: UnifiedTurfEstimateInput): UnifiedTurfEstimateResult {
-  const lineItems: UnifiedTurfLineItem[] = [];
-
-  // 1. Artificial Grass / Turf
   if (input.turfSft && input.turfSft > 0) {
-    const rate = input.turfRatePerSft !== undefined ? input.turfRatePerSft : 85.0;
-    const gstPct = input.turfGstPct !== undefined ? input.turfGstPct : 18.0;
-    const subtotal = Math.round(input.turfSft * rate * 100) / 100;
-    const gstAmount = Math.round(subtotal * (gstPct / 100) * 100) / 100;
+    const rate = input.turfRatePerSft || 85.0;
+    const sub = Math.round(input.turfSft * rate * 100) / 100;
+    const tax = Math.round(sub * (turfGst / 100) * 100) / 100;
+    const tot = Math.round((sub + tax) * 100) / 100;
     lineItems.push({
       itemCode: 'TURF-MAIN',
-      name: 'Artificial Grass / Sports Turf',
+      name: 'Professional Sports Turf / Artificial Grass Material',
       unit: 'SFT',
       quantity: input.turfSft,
       rate,
-      subtotal,
-      gstPct,
-      gstAmount,
-      totalWithGst: Math.round((subtotal + gstAmount) * 100) / 100
+      subtotal: sub,
+      gstPct: turfGst,
+      gstAmount: tax,
+      totalWithGst: tot
     });
+    totalTaxable += sub;
+    totalGst += tax;
+    grandTotal += tot;
   }
 
-  // 2. Silica Sand (₹8/kg, 5% GST)
+  // Accessories
   if (input.silicaSandKg && input.silicaSandKg > 0) {
     const calc = calculateTurfAccessory('silica_sand', input.silicaSandKg);
     lineItems.push({
-      itemCode: calc.product.id,
+      itemCode: 'ACC-SAND',
       name: calc.product.name,
       unit: calc.product.unit,
       quantity: calc.quantity,
@@ -606,13 +744,15 @@ export function calculateUnifiedTurfEstimate(input: UnifiedTurfEstimateInput): U
       gstAmount: calc.gstAmount,
       totalWithGst: calc.totalWithGst
     });
+    totalTaxable += calc.subtotal;
+    totalGst += calc.gstAmount;
+    grandTotal += calc.totalWithGst;
   }
 
-  // 3. Rubber Granules (₹36/kg, 5% GST)
   if (input.rubberGranulesKg && input.rubberGranulesKg > 0) {
     const calc = calculateTurfAccessory('rubber_granules', input.rubberGranulesKg);
     lineItems.push({
-      itemCode: calc.product.id,
+      itemCode: 'ACC-RUBBER',
       name: calc.product.name,
       unit: calc.product.unit,
       quantity: calc.quantity,
@@ -622,13 +762,15 @@ export function calculateUnifiedTurfEstimate(input: UnifiedTurfEstimateInput): U
       gstAmount: calc.gstAmount,
       totalWithGst: calc.totalWithGst
     });
+    totalTaxable += calc.subtotal;
+    totalGst += calc.gstAmount;
+    grandTotal += calc.totalWithGst;
   }
 
-  // 4. SPEB 7 Adhesive Glue (₹370/liter, 18% GST)
   if (input.glueLiters && input.glueLiters > 0) {
     const calc = calculateTurfAccessory('speb7_glue', input.glueLiters);
     lineItems.push({
-      itemCode: calc.product.id,
+      itemCode: 'ACC-GLUE',
       name: calc.product.name,
       unit: calc.product.unit,
       quantity: calc.quantity,
@@ -638,13 +780,15 @@ export function calculateUnifiedTurfEstimate(input: UnifiedTurfEstimateInput): U
       gstAmount: calc.gstAmount,
       totalWithGst: calc.totalWithGst
     });
+    totalTaxable += calc.subtotal;
+    totalGst += calc.gstAmount;
+    grandTotal += calc.totalWithGst;
   }
 
-  // 5. Seaming Tape (₹45/meter, 5% GST)
   if (input.seamingTapeMeters && input.seamingTapeMeters > 0) {
     const calc = calculateTurfAccessory('seaming_tape', input.seamingTapeMeters);
     lineItems.push({
-      itemCode: calc.product.id,
+      itemCode: 'ACC-TAPE',
       name: calc.product.name,
       unit: calc.product.unit,
       quantity: calc.quantity,
@@ -654,80 +798,42 @@ export function calculateUnifiedTurfEstimate(input: UnifiedTurfEstimateInput): U
       gstAmount: calc.gstAmount,
       totalWithGst: calc.totalWithGst
     });
+    totalTaxable += calc.subtotal;
+    totalGst += calc.gstAmount;
+    grandTotal += calc.totalWithGst;
   }
 
-  // 6. Transportation Charges
   if (input.transportCharges && input.transportCharges > 0) {
-    const rate = input.transportCharges;
-    const gstPct = input.transportGstPct !== undefined ? input.transportGstPct : 0.0;
-    const subtotal = Math.round(rate * 100) / 100;
-    const gstAmount = Math.round(subtotal * (gstPct / 100) * 100) / 100;
+    const trans = Math.round(input.transportCharges * 100) / 100;
     lineItems.push({
-      itemCode: 'TRANSPORT',
-      name: 'Dedicated Freight & Transport Logistics',
-      unit: 'Trip',
+      itemCode: 'LOGISTICS',
+      name: 'Freight and Transportation Handling',
+      unit: 'Trip / Consignment',
       quantity: 1,
-      rate,
-      subtotal,
-      gstPct,
-      gstAmount,
-      totalWithGst: Math.round((subtotal + gstAmount) * 100) / 100
+      rate: trans,
+      subtotal: trans,
+      gstPct: 0,
+      gstAmount: 0,
+      totalWithGst: trans
     });
+    totalTaxable += trans;
+    grandTotal += trans;
   }
-
-  const subtotal = Math.round(lineItems.reduce((acc, it) => acc + it.subtotal, 0) * 100) / 100;
-  const totalGst = Math.round(lineItems.reduce((acc, it) => acc + it.gstAmount, 0) * 100) / 100;
-  const grandTotal = Math.round((subtotal + totalGst) * 100) / 100;
-
-  const breakdownSummary = lineItems.map(it => 
-    `• ${it.name}: ${it.quantity} ${it.unit} @ ₹${it.rate}/${it.unit} = ₹${it.subtotal.toLocaleString('en-IN')} (+${it.gstPct}% GST ₹${it.gstAmount.toLocaleString('en-IN')} = ₹${it.totalWithGst.toLocaleString('en-IN')})`
-  ).join('\n');
 
   return {
     lineItems,
-    subtotal,
-    totalGst,
-    grandTotal,
-    breakdownSummary
+    subtotal: Math.round(totalTaxable * 100) / 100,
+    totalTaxable: Math.round(totalTaxable * 100) / 100,
+    totalGst: Math.round(totalGst * 100) / 100,
+    grandTotal: Math.round(grandTotal * 100) / 100
   };
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 6. ADMIN MANAGEMENT & AUDIT LOGGING (SECTION 6)
+// 7. BACKWARD COMPATIBILITY EXPORTS & CATALOG ALIASES
 // ═════════════════════════════════════════════════════════════════════════════
 
-export interface PriceAuditEntry {
-  productId: string;
-  productName: string;
-  fieldChanged: string;
-  oldValue: any;
-  newValue: any;
-  changedBy: string;
-  tenantId?: string;
-  effectiveFrom: string;
-  timestamp: string;
-}
-
-export function logPriceChange(entry: Omit<PriceAuditEntry, 'timestamp'>): void {
-  try {
-    db.prepare(`
-      INSERT INTO lead_activities (id, lead_id, activity_type, description, performed_by)
-      VALUES (?, 'SYSTEM-PRICING', 'PRICE_CHANGE_AUDIT', ?, ?)
-    `).run(
-      'AUDIT-' + Date.now().toString(36).toUpperCase(),
-      JSON.stringify({ ...entry, timestamp: new Date().toISOString() }),
-      entry.changedBy || 'ADMIN_USER'
-    );
-  } catch (err) {
-    console.warn('[Pricing Engine] Could not persist audit entry:', err);
-  }
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 7. LANDSCAPE ARTIFICIAL GRASS ROLL PRICING (SECTION 7 & 8)
-// ═════════════════════════════════════════════════════════════════════════════
-
-export const ROLL_SFT_STANDARD = 540; // 1 full roll = 540 SFT
+export const ROLL_SFT_STANDARD = SFT_PER_TURF_ROLL; // 540 SFT
 
 export const LANDSCAPE_GRASS_CATALOG: Record<string, { thickness: string; basePrice: number }> = {
   '25mm': { thickness: '25mm', basePrice: 24 },
@@ -736,13 +842,14 @@ export const LANDSCAPE_GRASS_CATALOG: Record<string, { thickness: string; basePr
   '50mm': { thickness: '50mm', basePrice: 36 }
 };
 
-export function getLandscapeRollDiscount(rolls: number): number {
-  if (rolls >= 11) return 4;
-  if (rolls >= 7) return 3;
-  if (rolls >= 4) return 2;
-  if (rolls >= 2) return 1;
-  return 0;
-}
+export const SPORTS_TURF_CATALOG: Record<string, { name: string; basePrice: number }> = {
+  '15mm_multisports': { name: '15mm 5500 DTEX Multi-Sport Turf', basePrice: 85 },
+  '30mm_non_infill': { name: '30mm 13500 DTEX Non-Infill Football Turf', basePrice: 85 },
+  '50mm_infill_12000': { name: '50mm 12000 DTEX Football Infill Turf', basePrice: 80 },
+  '50mm_infill_14000': { name: '50mm 14000 DTEX Football Infill Turf', basePrice: 85 },
+  '50mm_infill_16000': { name: '50mm 16000 DTEX Football Infill Turf', basePrice: 92 },
+  '50mm_infill_18000': { name: '50mm 18000 DTEX Football Infill Turf', basePrice: 100 }
+};
 
 export interface LandscapeGrassCalculationResult {
   variant: string;
@@ -770,12 +877,12 @@ export function calculateLandscapeGrassRolls(
     throw new Error(`Unknown landscape grass variant: ${variant}. Valid: 25mm, 35mm, 40mm, 50mm`);
   }
 
-  const sft = requiredSft && requiredSft > 0 ? requiredSft : (explicitRolls ? explicitRolls * ROLL_SFT_STANDARD : ROLL_SFT_STANDARD);
-  const rolls = explicitRolls && explicitRolls > 0 ? explicitRolls : Math.ceil(sft / ROLL_SFT_STANDARD);
-  const suppliedSft = rolls * ROLL_SFT_STANDARD;
+  const sft = requiredSft && requiredSft > 0 ? requiredSft : (explicitRolls ? explicitRolls * 540 : 540);
+  const rolls = explicitRolls && explicitRolls > 0 ? explicitRolls : Math.ceil(sft / 540);
+  const suppliedSft = rolls * 540;
   const extraSft = suppliedSft - sft;
 
-  const discount = getLandscapeRollDiscount(rolls);
+  const discount = getLandscapeDiscountPerSft(rolls);
   const finalRate = item.basePrice - discount;
   const materialSubtotal = Math.round(suppliedSft * finalRate * 100) / 100;
   const gstPct = 5.0;
@@ -797,27 +904,6 @@ export function calculateLandscapeGrassRolls(
     totalWithGst,
     policyNote: 'We supply full rolls only, sir. Each roll contains 540 SFT. Installation and transportation not included.'
   };
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 8. PREMIUM SPORTS TURF ROLL PRICING (SECTION 9)
-// ═════════════════════════════════════════════════════════════════════════════
-
-export const SPORTS_TURF_CATALOG: Record<string, { key: string; name: string; basePrice: number }> = {
-  '15mm_multisports': { key: '15mm_multisports', name: '15mm Multisports, 5500 DTEX', basePrice: 85 },
-  '30mm_non_infill': { key: '30mm_non_infill', name: '30mm Non-Infill, 13500 DTEX', basePrice: 85 },
-  '50mm_infill_12000': { key: '50mm_infill_12000', name: '50mm Infill, 12000 DTEX', basePrice: 80 },
-  '50mm_infill_14000': { key: '50mm_infill_14000', name: '50mm Infill, 14000 DTEX', basePrice: 85 },
-  '50mm_infill_16000': { key: '50mm_infill_16000', name: '50mm Infill, 16000 DTEX', basePrice: 92 },
-  '50mm_infill_18000': { key: '50mm_infill_18000', name: '50mm Infill, 18000 DTEX', basePrice: 100 }
-};
-
-export function getSportsTurfRollDiscount(rolls: number): number {
-  if (rolls >= 11) return 8;
-  if (rolls >= 7) return 6;
-  if (rolls >= 4) return 4;
-  if (rolls >= 2) return 2;
-  return 0;
 }
 
 export interface SportsTurfCalculationResult {
@@ -847,12 +933,12 @@ export function calculateSportsTurfRolls(
     throw new Error(`Unknown sports turf variant: ${variantKey}.`);
   }
 
-  const sft = requiredSft && requiredSft > 0 ? requiredSft : (explicitRolls ? explicitRolls * ROLL_SFT_STANDARD : ROLL_SFT_STANDARD);
-  const rolls = explicitRolls && explicitRolls > 0 ? explicitRolls : Math.ceil(sft / ROLL_SFT_STANDARD);
-  const suppliedSft = rolls * ROLL_SFT_STANDARD;
+  const sft = requiredSft && requiredSft > 0 ? requiredSft : (explicitRolls ? explicitRolls * 540 : 540);
+  const rolls = explicitRolls && explicitRolls > 0 ? explicitRolls : Math.ceil(sft / 540);
+  const suppliedSft = rolls * 540;
   const extraSft = suppliedSft - sft;
 
-  const discount = getSportsTurfRollDiscount(rolls);
+  const discount = getSportsTurfDiscountPerSft(rolls);
   const finalRate = item.basePrice - discount;
   const materialSubtotal = Math.round(suppliedSft * finalRate * 100) / 100;
   const gstPct = 5.0;

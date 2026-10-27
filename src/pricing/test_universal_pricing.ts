@@ -21,27 +21,27 @@ console.log('================================================================\n'
 // ── 1. INSTALLED SAFETY NETS BOUNDARY CORRECTION ─────────────────────────────
 console.log('--- 1. Testing Installed Safety Nets Boundary Rules ---');
 
-// Quality: 2.0mm_45mm (min charge: ₹1650, 101-250 slab standard: ₹24/sft)
+// Quality: 2.0mm_45mm (min charge: ₹1750, 100-250 slab rate: ₹20/sft)
 const net99 = calculateInstalledSafetyNet('2.0mm_45mm', 99);
 assert(net99.isMinimumChargeApplied === true, '99 SFT applies minimum charge');
-assert(net99.totalAmount === 1650, '99 SFT charges fixed ₹1,650 minimum');
+assert(net99.totalAmount === 1750, '99 SFT charges fixed ₹1,750 minimum');
 
 const net100 = calculateInstalledSafetyNet('2.0mm_45mm', 100);
 assert(net100.isMinimumChargeApplied === false, '100 SFT does NOT apply minimum charge');
-assert(net100.ratePerSft === 24, '100 SFT receives 101-250 SFT slab rate (₹24/sft)');
-assert(net100.totalAmount === 2400, '100 SFT total = 100 × 24 = ₹2,400');
+assert(net100.ratePerSft === 20, '100 SFT receives 100-250 SFT slab rate (₹20/sft)');
+assert(net100.totalAmount === 2000, '100 SFT total = 100 × 20 = ₹2,000');
 
 const net101 = calculateInstalledSafetyNet('2.0mm_45mm', 101);
 assert(net101.isMinimumChargeApplied === false, '101 SFT does not apply minimum charge');
-assert(net101.totalAmount === 101 * 24, '101 SFT total = 101 × 24 = ₹2,424');
+assert(net101.totalAmount === 101 * 20, '101 SFT total = 101 × 20 = ₹2,020');
 
 const net250 = calculateInstalledSafetyNet('2.0mm_45mm', 250);
-assert(net250.ratePerSft === 24, '250 SFT rate is ₹24/sft');
-assert(net250.totalAmount === 250 * 24, '250 SFT total = ₹6,000');
+assert(net250.ratePerSft === 20, '250 SFT rate is ₹20/sft');
+assert(net250.totalAmount === 250 * 20, '250 SFT total = ₹5,000');
 
 const net300 = calculateInstalledSafetyNet('2.0mm_45mm', 300);
-assert(net300.ratePerSft === 20, '300 SFT (251-500 slab) rate is ₹20/sft');
-assert(net300.totalAmount === 300 * 20, '300 SFT total = ₹6,000');
+assert(net300.ratePerSft === 17, '300 SFT (251-500 slab) rate is ₹17/sft');
+assert(net300.totalAmount === 300 * 17, '300 SFT total = ₹5,100');
 
 // Quality: 1.5mm_30mm (min charge: ₹1500, 101-250 slab standard: ₹18/sft)
 const pigeon99 = calculateInstalledSafetyNet('1.5mm_30mm', 99);
@@ -51,10 +51,10 @@ const pigeon100 = calculateInstalledSafetyNet('1.5mm_30mm', 100);
 assert(pigeon100.isMinimumChargeApplied === false, '1.5mm 100 SFT does NOT apply minimum charge');
 assert(pigeon100.totalAmount === 1800, '1.5mm 100 SFT total = 100 × 18 = ₹1,800');
 
-// Quality: 2.5mm_40mm (min charge: ₹1800, 101-250 slab standard: ₹28/sft)
+// Quality: 2.5mm_40mm (min charge: ₹2000, 100-250 slab rate: ₹23/sft)
 const heavy100 = calculateInstalledSafetyNet('2.5mm_40mm', 100);
 assert(heavy100.isMinimumChargeApplied === false, '2.5mm 100 SFT does NOT apply minimum charge');
-assert(heavy100.totalAmount === 2800, '2.5mm 100 SFT total = 100 × 28 = ₹2,800');
+assert(heavy100.totalAmount === 2300, '2.5mm 100 SFT total = 100 × 23 = ₹2,300');
 
 console.log('\n--- 2. Testing Cricket Braided Bag Pricing & Mixed Orders ---');
 

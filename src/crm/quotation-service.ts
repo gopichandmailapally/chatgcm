@@ -58,13 +58,22 @@ export async function createQuotation(input: CreateQuotationInput) {
   const gstAmount = Math.round(taxableAmount * (gstPct / 100) * 100) / 100;
   const grandTotal = Math.round((taxableAmount + gstAmount + transportCharges) * 100) / 100;
 
+  // Check if discount exceeded 5% -> Flag for Owner Approval
+  let requiresApproval = false;
+  let approvalId: string | null = null;
+  if (discountPct > 5.0) {
+    requiresApproval = true;
+  }
+
+  const initialStatus = requiresApproval ? 'PENDING_APPROVAL' : 'DRAFT';
+
   // Insert quotation into SQLite
   db.prepare(`
     INSERT INTO quotations (
       id, quote_number, lead_id, website_id, project_name, dimensions_text,
       subtotal, discount_pct, discount_amount, taxable_amount, gst_pct, gst_amount,
       transport_charges, installation_charges, grand_total, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SENT')
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     quoteId,
     quoteNumber,
@@ -80,7 +89,8 @@ export async function createQuotation(input: CreateQuotationInput) {
     gstAmount,
     transportCharges,
     installationCharges,
-    grandTotal
+    grandTotal,
+    initialStatus
   );
 
   // Insert quote line items
@@ -104,14 +114,9 @@ export async function createQuotation(input: CreateQuotationInput) {
     );
   }
 
-  // Progress Lead Stage in CRM
-  updateLeadStage(leadId, 'QUOTATION_SENT', `Quotation ${quoteNumber} generated for ${grandTotal.toLocaleString('en-IN')}`);
-
-  // Check if discount exceeded 5% -> Flag for Owner Approval
-  let requiresApproval = false;
-  let approvalId: string | null = null;
-  if (discountPct > 5.0) {
-    requiresApproval = true;
+  // Progress Lead Stage in CRM based on approval status
+  if (requiresApproval) {
+    updateLeadStage(leadId, 'APPROVAL_PENDING', `Quotation ${quoteNumber} pending owner approval (${discountPct}% discount requested)`);
     const approval = createOwnerApprovalRequest({
       leadId,
       quotationId: quoteId,
@@ -119,6 +124,8 @@ export async function createQuotation(input: CreateQuotationInput) {
       requestedDiscountPct: discountPct
     });
     approvalId = approval.id;
+  } else {
+    updateLeadStage(leadId, 'QUOTATION_DRAFT', `Quotation ${quoteNumber} draft prepared for ${grandTotal.toLocaleString('en-IN')}`);
   }
 
   // 🚀 Bridge directly to gcm.enterprises estimation engine

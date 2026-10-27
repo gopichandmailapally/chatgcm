@@ -464,10 +464,56 @@ Here are our verified company bank credentials for booking your order with ${bra
     }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SCENARIO 2: TURNKEY BOX CRICKET GROUND SETUP (Applied across all brands)
+  // SCENARIO 2: HIGH DISCOUNT OWNER APPROVAL GUARDRAIL (Phase 8 & 14)
+  // ═══════════════════════════════════════════════════════════════════════════
+  } else if (isDiscount) {
+    const discMatch = lower.match(/(\d+(?:\.\d+)?)\s*%/);
+    const requestedDiscount = discMatch ? parseFloat(discMatch[1]) : 10.0;
+
+    if (requestedDiscount > 5.0) {
+      cardType = 'approval_notice';
+      cardData = {
+        status: 'OWNER_APPROVAL_REQUIRED',
+        requestedDiscountPct: requestedDiscount,
+        maxAiDiscountPct: 5.0,
+        reason: `Customer requested ${requestedDiscount}% discount (exceeds autonomous 5% AI threshold)`
+      };
+
+      replyText = detectedLang === 'telugu'
+        ? `తప్పకుండా సర్. నేను స్వయంగా 5% వరకు డైరెక్ట్ డిస్కౌంట్ ఇవ్వగలను సర్. మీరు ${requestedDiscount}% డిస్కౌంట్ అడిగినందున, ఈ రిక్వెస్ట్ ని మా ఓనర్/మేనేజింగ్ డైరెక్టర్ ప్రత్యేక అనుమతి కోసం ఫార్వార్డ్ చేశాను. వారు పరిశీలించి వెంటనే మీకు బెస్ట్ రేట్ కన్ఫర్మ్ చేస్తారు సర్!`
+        : `Under our autonomous pricing policy, I can directly approve up to 5% discount, sir. Since you requested a ${requestedDiscount}% discount, I have routed this request to our Managing Director for special commercial approval. We will get back to you immediately with the authorized price!`;
+    } else {
+      replyText = detectedLang === 'telugu'
+        ? `తప్పకుండా సర్! మీ ఆర్డర్ కి 5% డైరెక్ట్ డిస్కౌంట్ వర్తింపజేస్తున్నాము.`
+        : `Certainly ${customerDisplayName}! I have applied our authorized 5% direct volume discount to your order.`;
+    }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SCENARIO 3: TURNKEY BOX CRICKET GROUND INQUIRY WITH DIMENSIONS
+  // ═══════════════════════════════════════════════════════════════════════════
+  } else if (isTurnkeyIntent && (dimMatch || sftMatch)) {
+    let length = 100;
+    let width = 50;
+    let height = 25;
+
+    if (dimMatch) {
+      length = parseFloat(dimMatch[1]);
+      width = parseFloat(dimMatch[2]);
+      if (dimMatch[3]) height = parseFloat(dimMatch[3]);
+    }
+
+    const { calculateTurnkeyBoxCricket } = await import('../calculators/turnkey-box-calculator.js');
+    const turnkey = calculateTurnkeyBoxCricket({ lengthFt: length, widthFt: width, heightFt: height });
+
+    cardType = 'turnkey_boq';
+    cardData = turnkey;
+
+    replyText = `For a turnkey box cricket ground of ${length}x${width}x${height} ft (${turnkey.dimensions.groundAreaSft.toLocaleString('en-IN')} SFT), the complete turnkey project estimate is ₹${turnkey.grandTotal.toLocaleString('en-IN')} including pitch, steel structure, FIFA-grade turf, 2.5mm heavy-duty nets, and stadium floodlights. Would you like to schedule an engineer site visit?`;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SCENARIO 4: CONSULTATIVE SALES ENGINE DELEGATION
   // ═══════════════════════════════════════════════════════════════════════════
   } else {
-    // ── 6. Human Sales Consultant & Dialog Engine ───────────────────────────
     const consultantResult = handleSalesConversation({
       sessionId,
       websiteId,
