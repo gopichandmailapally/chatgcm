@@ -353,6 +353,57 @@ export class UniversalKnowledgeEngine {
         ],
         lastIndexed: new Date().toISOString()
       });
+      // 10. NettingTeam (Hyderabad Focused 183 Localities)
+      this.indexBrandPortal('nettingteam', {
+        brandName: 'NettingTeam (Hyderabad)',
+        domain: 'nettingteam.com',
+        primaryPillar: 'doorstep_service',
+        primaryFocus: 'Hyper-Local Safety Netting & Installation across all 183 Localities of Greater Hyderabad & Secunderabad',
+        serviceCities: ['Hyderabad', 'Secunderabad', 'Cyberabad'],
+        localities: this.localAreasMap.get('hyderabad') || [],
+        rateCards: this.unifiedRateCards.safety_nets,
+        technicalHighlights: [
+          'Dedicated Greater Hyderabad coverage across West, Central, North, East, and South Zones',
+          'Fast mobile doorstep van dispatch with on-site technician demo',
+          'SS 316 marine-grade hardware and virgin HDPE UV-stabilized netting',
+          'Official contact phone: +91 99123 99334'
+        ],
+        lastIndexed: new Date().toISOString()
+      });
+
+      // 11. GCM Safety Nets (National Portal)
+      this.indexBrandPortal('gcmsafetynets-com', {
+        brandName: 'GCM Safety Nets (National)',
+        domain: 'gcmsafetynets.com',
+        primaryPillar: 'doorstep_service',
+        primaryFocus: 'National Premier Balcony, Pigeon & Industrial Safety Netting Network across Metro Cities',
+        serviceCities: ['Hyderabad', 'Bangalore', 'Chennai', 'Vijayawada', 'Visakhapatnam', 'Pune', 'Mumbai'],
+        localities: ['All Metro Urban Localities & Key Residential High-rises'],
+        rateCards: this.unifiedRateCards.safety_nets,
+        technicalHighlights: [
+          'Pan-India installation network with verified local technician teams',
+          'Complete 3-year to 5-year warranty with stamped invoice',
+          'Standardised transparent square-foot pricing'
+        ],
+        lastIndexed: new Date().toISOString()
+      });
+
+      // 12. Zenxa Architectural & Industrial Protection
+      this.indexBrandPortal('zenxa', {
+        brandName: 'Zenxa Architectural & Industrial Protection',
+        domain: 'zenxa.in',
+        primaryPillar: 'doorstep_service',
+        primaryFocus: 'Architectural Cable Systems, Industrial Netting & Heavy Sports Enclosures',
+        serviceCities: ['Pan-India'],
+        localities: ['Industrial Parks, SEZs, Commercial Atriums, Stadiums'],
+        rateCards: this.unifiedRateCards.safety_nets,
+        technicalHighlights: [
+          'Architectural tensile wire rope safety systems',
+          'Industrial heavy-duty fall arrest & debris catchment',
+          'Structural engineering compliant installation'
+        ],
+        lastIndexed: new Date().toISOString()
+      });
 
       // 5. Automatically check for any other directories in /var/www/
       const serverDirs = fs.readdirSync(baseWww);
@@ -428,7 +479,7 @@ export class UniversalKnowledgeEngine {
       currentAccountNo: '44979437825',
       ifscCode: 'SBIN0021462',
       branch: 'Greenpark Colony',
-      officialUpiId: '9912399224@sbi',
+      officialUpiId: 'gcmenterprises@ybl',
       managingDirector: 'Mr. Gopichand Mailapally',
       executiveDirectLine: '+91 99123 99224',
       officialWhatsAppLine: '+91 99123 99334',

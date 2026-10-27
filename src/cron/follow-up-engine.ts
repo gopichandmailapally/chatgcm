@@ -85,8 +85,15 @@ export async function runFollowUpCycle(): Promise<void> {
       // Check if customer sent a message recently (within last 2 hours)
       if (lead.last_customer_message_at) {
         const lastMsgTime = new Date(lead.last_customer_message_at).getTime();
-        if ((now - lastMsgTime) < (2 * 3600 * 1000)) {
+        const diffMs = now - lastMsgTime;
+        if (diffMs < (2 * 3600 * 1000)) {
           continue; // Don't interrupt recent conversation!
+        }
+
+        // Meta Cloud API Rule: Free-form WhatsApp messages fail with #100/#131047 after 24 hours
+        // If outside 24-hr window, queue for human phone callback instead of failing Meta API
+        if (diffMs >= (23.5 * 3600 * 1000)) {
+          continue; // Safely skip automated text outside 24h window
         }
       }
 
@@ -101,7 +108,7 @@ export async function runFollowUpCycle(): Promise<void> {
 
       // Follow-Up 1: 3 to 8 hours after inquiry
       if (ageHours >= 3 && ageHours <= 8 && !notes.includes('[FOLLOW_UP_1]')) {
-        const msg = `Namaste ${firstName} sir! 🙏\n\nThis is ${persona.name} from ${persona.brandName}. Just checking in to see if you had a chance to review the details for your requirement (*${lead.requirement_summary || 'Netting Solution'}*)?\n\nOur field technician is visiting apartments in your area today for free measurements. If you'd like him to stop by for 5 minutes with material samples, please let me know!\n\n— ${persona.name} (Ph: 99123 99334)`;
+        const msg = `Namaste ${firstName} sir! 🙏\n\nThis is ${persona.name} from ${persona.brandName}. Just checking in to see if you had a chance to review the details for your requirement (*${lead.requirement_summary || 'Netting Solution'}*)?\n\nOur field technician is visiting apartments in your area today for free measurements. If you'd like him to stop by for 5 minutes with material samples, please let me know!\n\n— ${persona.name} (Ph: ${persona.officialPhone})`;
 
         console.log(`📨 [Respectful Follow-Up 1] Sending to ${targetPhone}...`);
         const res = await sendWhatsAppMessage(targetPhone, msg);
@@ -125,7 +132,7 @@ export async function runFollowUpCycle(): Promise<void> {
 
       // Follow-Up 2: 24 to 48 hours after inquiry
       else if (ageHours >= 24 && ageHours <= 48 && notes.includes('[FOLLOW_UP_1]') && !notes.includes('[FOLLOW_UP_2]')) {
-        const msg = `Good morning ${firstName} sir! 🕊️\n\nI am ${persona.name} from ${persona.brandName}. Just following up to see if you would like to reserve your balcony installation slot for this week?\n\nWe have genuine RUSSEA™ UV stock ready at our depot with a 5-year replacement warranty card. Please let me know if you would like us to reserve your slot!\n\n— ${persona.name} (Ph: 99123 99334)`;
+        const msg = `Good morning ${firstName} sir! 🕊️\n\nI am ${persona.name} from ${persona.brandName}. Just following up to see if you would like to reserve your balcony installation slot for this week?\n\nWe have genuine RUSSEA™ UV stock ready at our depot with a 5-year replacement warranty card. Please let me know if you would like us to reserve your slot!\n\n— ${persona.name} (Ph: ${persona.officialPhone})`;
 
         console.log(`📨 [Respectful Follow-Up 2] Sending to ${targetPhone}...`);
         const res = await sendWhatsAppMessage(targetPhone, msg);
@@ -170,7 +177,7 @@ export async function runFollowUpCycle(): Promise<void> {
         const persona = getAgentPersona(lead.city || lead.area, lead.website_id);
         const customerName = lead.customer_name && !lead.customer_name.includes('Visitor') ? lead.customer_name : 'Sir';
         
-        const msg = `Namaste ${customerName}! 🙏\n\nI am ${persona.name} from GCM Enterprises Logistics Desk following up on your netting shipment sent via *${lead.dispatch_transporter || 'Transporter'}* (LR / Bilty #${lead.lr_number || ''}).\n\nHave you received your parcels safely? Please let us know if everything arrived in perfect condition or if you need installation guidance!\n\n— ${persona.name} (Ph: 99123 99334)`;
+        const msg = `Namaste ${customerName}! 🙏\n\nI am ${persona.name} from GCM Enterprises Logistics Desk following up on your netting shipment sent via *${lead.dispatch_transporter || 'Transporter'}* (LR / Bilty #${lead.lr_number || ''}).\n\nHave you received your parcels safely? Please let us know if everything arrived in perfect condition or if you need installation guidance!\n\n— ${persona.name} (Ph: ${persona.officialPhone})`;
 
         console.log(`🚚 [Auto Delivery Follow-Up] Sending to ${targetPhone}...`);
         const res = await sendWhatsAppMessage(targetPhone, msg);

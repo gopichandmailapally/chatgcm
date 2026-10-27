@@ -51,7 +51,22 @@ export function analyzeCustomerSchedule(
     /ಬೇಡ/,
     // Hindi
     /\b(nahi\s*chahiye|mat\s*karo|disturb\s*mat\s*karo|call\s*mat\s*karo)\b/i,
-    /नहीं\s*चाहिए/
+    /नहीं\s*चाहिए/,
+    // Malayalam
+    /\b(venda|vendam|aavashyilla|call\s*cheyyalle)\b/i,
+    /വേണ്ട/,
+    // Marathi
+    /\b(nako|nakoy|garaj\s*nahi|call\s*karu\s*naka)\b/i,
+    /नको|गरज\s*नाही/,
+    // Gujarati
+    /\b(nathi\s*joitu|call\s*na\_karo|disturb\s*na\s*karo)\b/i,
+    /નથી\s*જોઈતું/,
+    // Punjabi
+    /\b(nahi\s*chahida|phone\s*na\s*kareyo|disturb\s*na\s*karo)\b/i,
+    /ਨਹੀਂ\s*ਚਾਹੀਦਾ/,
+    // Odia
+    /\b(darkar\s*nahin|call\s*karantu\s*nahin)\b/i,
+    /ଦରକାର\s*ନାହିଁ/
   ];
 
   for (const pattern of optOutPatterns) {
@@ -64,7 +79,17 @@ export function analyzeCustomerSchedule(
       } else if (lang === 'kannada') {
         ack = `ಖಂಡಿತ ${name} ಸರ್! 🙏\n\nನಿಮ್ಮ ನಂಬರ್ ಅಪ್ಡೇಟ್ ಮಾಡಿದ್ದೇವೆ, ಇನ್ಮುಂದೆ ಯಾವುದೇ ಮೆಸೇಜ್ ಬರಲ್ಲ ಸರ್. ಭವಿಷ್ಯದಲ್ಲಿ ನೆಟ್ಸ್ ಅಥವಾ ಗ್ರಿಲ್ಸ್ ಬೇಕಾದಾಗ ಸಂಪರ್ಕಿಸಿ.\n\nಧನ್ಯವಾದಗಳು సర్! 🙏`;
       } else if (lang === 'hindi') {
-        ack = `बिल्कुल ${name} जी! 🙏\n\nहमने आपका नंबर तुरंत अपडेट कर दिया है, आगे से आपको कोई मैसेज या कॉल नहीं आएगा। भविष्य में कभी भी सेफ्टी नेट्स या स्पोर्ट्स ग्राउंड की जरूरत हो तो GCM हमेशा आपकी सेवा में उपलब्ध है।\n\nआपका दिन शुभ हो! 🙏`;
+        ack = `बिल्कुल ${name} जी! 🙏\n\nहमने आपका नंबर तुरंत अपडेट कर दिया है, आगे से आपको कोई मैसेज या कॉल नहीं आएगा। भविष्य में कभी भी सेफ्टी नेट्स या स्पोर्ट्स ग्राउंड की जरूरत हो तो ${persona.brandName} हमेशा आपकी सेवा में उपलब्ध है।\n\nआपका दिन शुभ हो! 🙏`;
+      } else if (lang === 'malayalam') {
+        ack = `തീർച്ചയായും ${name} സർ! 🙏\n\nഞങ്ങൾ താങ്കളുടെ നമ്പർ റെക്കോർഡിൽ നിന്ന് നീക്കം ചെയ്തിട്ടുണ്ട്, ഇനി മെസ്സേജുകൾ വരില്ല. ഭാവിയിൽ സുരക്ഷാ വലകളോ ഗ്രില്ലുകളോ ആവശ്യമുള്ളപ്പോൾ ${persona.brandName} താങ്കളെ സഹായിക്കാൻ ഉണ്ടാകും.\n\nനന്ദി സർ! 🙏`;
+      } else if (lang === 'marathi') {
+        ack = `नक्कीच ${name} साहेब! 🙏\n\nआम्ही तुमचा नंबर त्वरित अपडेट केला आहे, यापुढे तुम्हाला कोणताही मेसेज येणार नाही. भविष्यात कधीही सेफ्टी नेट्स किंवा अदृश्य ग्रील्सची गरज भासल्यास ${persona.brandName} नेहमी आपल्या सेवेत हजर आहे.\n\nआपला दिवस शुभ जावो! 🙏`;
+      } else if (lang === 'gujarati') {
+        ack = `ચોક્કસ ${name} ભાઈ! 🙏\n\nઅમે તમારો નંબર અપડેટ કરી દીધો છે, હવે પછી કોઈ મેસેજ આવશે નહીં. ભવિષ્યમાં સેફ્ટી નેટ્સ કે ઇન્વિઝિબલ ગ્રીલની જરૂર હોય ત્યારે ${persona.brandName} હંમેશા મદદ માટે તૈયાર છે.\n\nઆભાર! 🙏`;
+      } else if (lang === 'punjabi') {
+        ack = `ਬਿਲਕੁਲ ${name} ਜੀ! 🙏\n\nਅਸੀਂ ਤੁਹਾਡਾ ਨੰਬਰ ਅੱਪਡੇਟ ਕਰ ਦਿੱਤਾ ਹੈ, ਹੁਣ ਕੋਈ ਮੈਸੇਜ ਨਹੀਂ ਆਵੇਗਾ। ਭਵਿੱਖ ਵਿੱਚ ਸੇਫਟੀ ਨੈੱਟਾਂ ਦੀ ਲੋੜ ਪੈਣ 'ਤੇ ${persona.brandName} ਹਮੇਸ਼ਾ ਤਿਆਰ ਹੈ।\n\nਧੰਨਵਾਦ ਜੀ! 🙏`;
+      } else if (lang === 'odia') {
+        ack = `ନିଶ୍ଚୟ ${name} ଆଜ୍ଞା! 🙏\n\nଆମେ ଆପଣଙ୍କ ନମ୍ବର ଅପଡେଟ୍ କରିଦେଇଛୁ, ଆଉ କୌଣସି ମେସେଜ୍ ଯିବ ନାହିଁ। ଭବିଷ୍ୟତରେ ସେଫ୍ଟି ନେଟ୍ସ ଦରକାର ହେଲେ ${persona.brandName} ସର୍ବଦା ଆପଣଙ୍କ ସେବାରେ ଅଛି।\n\nଧନ୍ୟବାଦ! 🙏`;
       } else {
         ack = `Thank you for letting me know, ${name}! 🙏\n\nI have updated our records immediately and will not trouble you with further messages. If you ever need balcony safety netting, invisible grills, or sports infrastructure in the future, our team at GCM Enterprises is always here to assist.\n\nWishing you a wonderful day ahead! 🙏`;
       }

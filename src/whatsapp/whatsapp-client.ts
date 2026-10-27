@@ -18,8 +18,16 @@ export function isWhatsAppConfigured(): boolean {
  * Format phone number to international format without + or spaces (e.g. 919912399224)
  */
 export function formatPhoneNumber(phone: string): string {
+  if (!phone) return '';
   let cleaned = phone.replace(/\D/g, '');
-  if (cleaned.length === 10) {
+  // Strip leading international prefix 00 or single 0
+  if (cleaned.startsWith('00')) {
+    cleaned = cleaned.slice(2);
+  } else if (cleaned.startsWith('0') && cleaned.length === 11) {
+    cleaned = cleaned.slice(1);
+  }
+  // Standard 10-digit Indian mobile starting with 6, 7, 8, or 9
+  if (cleaned.length === 10 && /^[6-9]\d{9}$/.test(cleaned)) {
     cleaned = '91' + cleaned;
   }
   return cleaned;
@@ -55,13 +63,16 @@ export async function sendWhatsAppMessage(toPhone: string, message: string): Pro
   const recipient = formatPhoneNumber(toPhone);
   const url = `https://graph.facebook.com/v21.0/${phoneId}/messages`;
 
+  // Meta Cloud API v21.0 requirement: preview_url must ONLY be true if body contains a valid HTTP/HTTPS URL
+  const hasValidUrl = /https?:\/\/[^\s]+/.test(message);
+
   const payload = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
     to: recipient,
     type: 'text',
     text: {
-      preview_url: true,
+      preview_url: hasValidUrl,
       body: message
     }
   };
@@ -233,3 +244,60 @@ export async function markWhatsAppAsRead(messageId: string): Promise<void> {
     // Ignore read receipt errors
   }
 }
+
+/**
+ * Send an approved Meta WhatsApp HSM Template message (for 24-hour window re-engagement or broadcasts)
+ */
+export async function sendWhatsAppTemplate(
+  toPhone: string,
+  templateName: string,
+  languageCode: string = 'en',
+  components: any[] = []
+): Promise<any> {
+  const token = process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  if (!token || !phoneId) return { success: false, reason: 'WHATSAPP_NOT_CONFIGURED' };
+
+  const recipient = formatPhoneNumber(toPhone);
+  const url = `https://graph.facebook.com/v21.0/${phoneId}/messages`;
+
+  const payload: any = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: recipient,
+    type: 'template',
+    template: {
+      name: templateName,
+      language: {
+        code: languageCode
+      }
+    }
+  };
+
+  if (components && components.length > 0) {
+    payload.template.components = components;
+  }
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      console.error('[WhatsApp Template Error]', data);
+      const isNotWhatsApp = detectNoWhatsApp(data);
+      return { success: false, error: data, isNotWhatsApp };
+    }
+    return { success: true, data };
+  } catch (err: any) {
+    console.error('[WhatsApp Template Error]', err);
+    return { success: false, error: err.message };
+  }
+}
+

@@ -188,4 +188,89 @@ export const GCM_TOOLS = [
       }
     }
   }
+,
+  {
+    type: 'function',
+    function: {
+      name: 'calculate_installed_safety_net',
+      description: 'Calculates installed safety net pricing strictly enforcing boundary rules (<100 SFT min charge, 100 SFT exactly = 100 * 101-250 rate, >100 SFT slab rate).',
+      parameters: {
+        type: 'object',
+        properties: {
+          qualityKey: { type: 'string', enum: ['1.5mm_30mm', '2.0mm_40mm', '2.0mm_45mm', '2.0mm_50mm', '2.5mm_40mm'] },
+          actualAreaSft: { type: 'number' },
+          rateMode: { type: 'string', enum: ['min', 'max', 'standard'] }
+        },
+        required: ['actualAreaSft']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'calculate_cricket_braided_bags',
+      description: 'Calculates cricket braided netting in full bags (3,300 SFT) and half bags (1,650 SFT) for 2mm and 2.5mm variants at 40mm and 45mm mesh with explicit mixed bag policy.',
+      parameters: {
+        type: 'object',
+        properties: {
+          variant: { type: 'string', enum: ['2mm_45mm', '2mm_40mm', '2.5mm_45mm', '2.5mm_40mm'] },
+          fullBags: { type: 'number' },
+          halfBags: { type: 'number' },
+          mixedBagPolicy: { type: 'string', enum: ['SEPARATE_TIERS', 'TOTAL_VOLUME_TIER', 'REQUIRE_OWNER_CONFIRMATION'] },
+          gstRate: { type: 'number' }
+        },
+        required: ['variant']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'calculate_cricket_twisted_net',
+      description: 'Calculates 1.5mm twisted cricket netting across exact slabs (500-3300 @ ₹5, 3301-5000 @ ₹4.75, 5001-10000 @ ₹4.50, 10001+ @ ₹4.25) + ₹0.50 customization + 5% GST.',
+      parameters: {
+        type: 'object',
+        properties: {
+          sft: { type: 'number' },
+          includeCustomization: { type: 'boolean' }
+        },
+        required: ['sft']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'calculate_turf_accessories',
+      description: 'Calculates material supply prices for turf installation accessories: Silica Sand (₹8/kg, 5% GST), Rubber Granules (₹36/kg, 5% GST), SPEB 7 Glue (₹370/L, 18% GST), Seaming Tape (₹45/m, 5% GST).',
+      parameters: {
+        type: 'object',
+        properties: {
+          accessoryKey: { type: 'string', enum: ['silica_sand', 'rubber_granules', 'speb7_glue', 'seaming_tape'] },
+          quantity: { type: 'number' }
+        },
+        required: ['accessoryKey', 'quantity']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'calculate_unified_turf',
+      description: 'Calculates a unified turf estimation with independent line items for artificial grass/turf, silica sand, rubber granules, SPEB 7 glue, seaming tape, and transport, each with independent rate and GST.',
+      parameters: {
+        type: 'object',
+        properties: {
+          turfSft: { type: 'number' },
+          turfRatePerSft: { type: 'number' },
+          turfGstPct: { type: 'number' },
+          silicaSandKg: { type: 'number' },
+          rubberGranulesKg: { type: 'number' },
+          glueLiters: { type: 'number' },
+          seamingTapeMeters: { type: 'number' },
+          transportCharges: { type: 'number' }
+        }
+      }
+    }
+  }
 ];

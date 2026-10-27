@@ -24,10 +24,21 @@
 
   // Multi-tenant configuration
   const TENANTS = {
+    "nettingteam": {
+      name: "Venkatesh (NettingTeam Hyderabad)",
+      badge: "Hyderabad Technical Lead",
+      welcome: "👋 Namaste! I am <strong>Venkatesh</strong> from NettingTeam Hyderabad.<br><br>We provide dedicated balcony safety nets, pigeon protection, and invisible grills across all 183 localities of Greater Hyderabad & Secunderabad.",
+      chips: [
+        { label: "🏢 Balcony Net 15 x 6", prompt: "balcony net 15 x 6 in Hyderabad" },
+        { label: "🕊️ Pigeon Net Estimate", prompt: "pigeon protection net for balcony" },
+        { label: "✨ Invisible Grills Price", prompt: "316-L invisible grills price per sft" },
+        { label: "📅 Book Free Site Visit", prompt: "I want to book a doorstep inspection in Hyderabad" }
+      ]
+    },
     "gcmsafetynets": {
-      name: "GCM Safety Nets AI",
-      badge: "Safety & Pigeon Nets",
-      welcome: "👋 Hello! I am the <strong>GCM Safety Nets AI Assistant</strong>.<br><br>I can provide instant square foot estimates for balcony safety nets, pigeon protection nets, or invisible grills.",
+      name: "Venkatesh (GCM Safety Nets)",
+      badge: "Technical Consultant",
+      welcome: "👋 Namaste! I am <strong>Venkatesh</strong>, Senior Technical Consultant at GCM Safety Nets.<br><br>I can provide instant transparent estimates for balcony safety nets, pigeon protection nets, or invisible grills.",
       chips: [
         { label: "🏢 Balcony Net 15 x 6", prompt: "balcony net 15 x 6" },
         { label: "🕊️ Pigeon Net Estimate", prompt: "pigeon protection net for balcony" },
@@ -36,9 +47,9 @@
       ]
     },
     "netsocean": {
-      name: "NetsOcean AI Brain",
-      badge: "Cricket Ground BOQ",
-      welcome: "👋 Hello! I am the <strong>NetsOcean AI Sales Brain</strong>.<br><br>I calculate exact netting SFT with 8% roof camber allowance, turnkey box cricket BOQ, or wholesale rate tiers.",
+      name: "Venkatesh (NetsOcean Wholesale)",
+      badge: "Depot Manager",
+      welcome: "👋 Namaste! I am <strong>Venkatesh</strong> from NetsOcean Wholesale Desk.<br><br>I can calculate exact netting SFT with 8% roof camber allowance, turnkey box cricket BOQ, or factory-direct wholesale pricing.",
       chips: [
         { label: "🏏 100 x 50 x 25 Box Cricket", prompt: "100 x 50 x 25 cricket net" },
         { label: "🏗️ Turnkey Box Setup", prompt: "turnkey box cricket setup 100x50" },
@@ -47,9 +58,9 @@
       ]
     },
     "gcminvisiblegrills": {
-      name: "GCM Invisible Grills AI",
-      badge: "316-L SS Grills",
-      welcome: "👋 Hello! I am the <strong>GCM Invisible Grills AI</strong>.<br><br>Get instant pricing for AISI 316 marine-grade stainless steel invisible grills, balcony safety, and window installations.",
+      name: "Venkatesh (GCM Invisible Grills)",
+      badge: "Safety Consultant",
+      welcome: "👋 Namaste! I am <strong>Venkatesh</strong> from GCM Invisible Grills.<br><br>Get instant transparent pricing for AISI 316 marine-grade stainless steel invisible grills, balcony safety, and window installations.",
       chips: [
         { label: "✨ 316-L SS Rate/SFT", prompt: "invisible grill price per sft" },
         { label: "🏢 Balcony 12 x 5 Estimate", prompt: "balcony invisible grill 12 x 5" },
@@ -58,9 +69,9 @@
       ]
     },
     "russea": {
-      name: "RUSSEA™ Netting AI",
+      name: "Venkatesh (RUSSEA™ Technical Netting)",
       badge: "Technical Textiles",
-      welcome: "👋 Welcome to <strong>RUSSEA™ Technical Netting</strong>.<br><br>Inquire about factory-direct 100% Virgin HDPE braided nets, BCCI-spec sports netting, and bulk wholesale pricing.",
+      welcome: "👋 Welcome to <strong>RUSSEA™ Technical Netting</strong>. I am Venkatesh, Technical Sales Manager.<br><br>Inquire about factory-direct 100% Virgin HDPE braided nets, BCCI-spec sports netting, and bulk wholesale pricing.",
       chips: [
         { label: "🧵 2.5mm Braided Net Rate", prompt: "2.5mm braided net wholesale rate" },
         { label: "🏏 BCCI Pitch Specs", prompt: "BCCI specification practice nets" },
@@ -69,9 +80,9 @@
       ]
     },
     "gcm-enterprises": {
-      name: "Chat GCM Sales Brain",
-      badge: "Turnkey BOQ & ERP",
-      welcome: "👋 Hello! I am the <strong>GCM AI Sales Brain</strong>.<br><br>I can calculate exact SFT for cricket pitches, generate turnkey ground estimates, or check approved factory rates with zero wait time.",
+      name: "Venkatesh (GCM Enterprises)",
+      badge: "Senior Project Manager",
+      welcome: "👋 Namaste! I am <strong>Venkatesh</strong>, Senior Project Manager at GCM Enterprises.<br><br>I can calculate exact SFT for cricket pitches, generate turnkey ground estimates, or check approved factory rates with zero wait time.",
       chips: [
         { label: "🏏 100 x 50 Cricket Net", prompt: "100 x 50 x 25 cricket net" },
         { label: "🏗️ Turnkey Box Cricket", prompt: "turnkey box cricket setup 100x50" },

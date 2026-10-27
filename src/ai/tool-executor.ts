@@ -1,3 +1,10 @@
+import { 
+  calculateInstalledSafetyNet,
+  calculateCricketBraidedBags,
+  calculateTwisted15Netting,
+  calculateTurfAccessory,
+  calculateUnifiedTurfEstimate
+} from '../pricing/universal-pricing-engine.js';
 /**
  * Tool Execution Dispatcher
  * Directly connects AI tool requests to deterministic algorithms and database queries.
@@ -10,6 +17,8 @@
 import { calculateCricketNetting } from '../calculators/cricket-net-calculator.js';
 import { calculateTurnkeyBoxCricketBOQ, calculateTurnkeyBoxCricket } from '../calculators/turnkey-box-calculator.js';
 import { calculateSafetyNetInstallation, calculateBalconySafety } from '../calculators/balcony-safety-calculator.js';
+import { calculateClothHanger } from '../calculators/cloth-hanger-calculator.js';
+import { calculateInvisibleGrills } from '../calculators/invisible-grill-calculator.js';
 import { calculateNetsOceanSupply } from '../calculators/netsocean-supply-calculator.js';
 import { getApprovedProductPrice, listAvailableProducts } from '../pricing/pricing-engine.js';
 import { createOrUpdateLead } from '../crm/lead-service.js';
@@ -51,6 +60,26 @@ export async function executeToolCall(toolName: string, args: any, context: Tool
       });
     }
 
+    case 'calculate_cloth_hanger': {
+      return calculateClothHanger({
+        sizeFt: Number(args.sizeFt || 6) as any,
+        mountingType: args.mountingType || 'ceiling',
+        quantity: args.quantity ? Number(args.quantity) : 1,
+        isOutsideHyderabad: args.isOutsideHyderabad === true,
+        locationCity: args.locationCity
+      });
+    }
+
+    case 'calculate_invisible_grills': {
+      return calculateInvisibleGrills({
+        totalAreaSft: args.totalAreaSft ? Number(args.totalAreaSft) : undefined,
+        openings: args.openings,
+        isOutsideHyderabad: args.isOutsideHyderabad === true,
+        locationCity: args.locationCity,
+        wireDiameter: args.wireDiameter,
+        spacing: args.spacing
+      });
+    }
     // ── Pillar 3: Material Sales & Supply Only (netsocean.com) ─────────────
     case 'calculate_netsocean_supply': {
       return calculateNetsOceanSupply({
@@ -127,6 +156,50 @@ export async function executeToolCall(toolName: string, args: any, context: Tool
         items: args.items,
         discountPct: Number(args.discountPct || 0),
         transportCharges: Number(args.transportCharges || 0)
+      });
+    }
+
+    // ── Universal Pricing Engine Dispatches ──────────────────────────────
+    case 'calculate_installed_safety_net': {
+      return calculateInstalledSafetyNet(
+        args.qualityKey || '2.0mm_45mm',
+        Number(args.actualAreaSft),
+        args.rateMode || 'standard'
+      );
+    }
+
+    case 'calculate_cricket_braided_bags': {
+      return calculateCricketBraidedBags({
+        variant: args.variant,
+        fullBags: Number(args.fullBags || 0),
+        halfBags: Number(args.halfBags || 0),
+        mixedBagPolicy: args.mixedBagPolicy || 'SEPARATE_TIERS',
+        gstRate: args.gstRate !== undefined ? Number(args.gstRate) : 5.0
+      });
+    }
+
+    case 'calculate_cricket_twisted_net': {
+      return calculateTwisted15Netting(
+        Number(args.sft),
+        args.includeCustomization !== false
+      );
+    }
+
+    case 'calculate_turf_accessories': {
+      return calculateTurfAccessory(args.accessoryKey, Number(args.quantity));
+    }
+
+    case 'calculate_unified_turf': {
+      return calculateUnifiedTurfEstimate({
+        turfSft: args.turfSft ? Number(args.turfSft) : undefined,
+        turfRatePerSft: args.turfRatePerSft ? Number(args.turfRatePerSft) : undefined,
+        turfGstPct: args.turfGstPct ? Number(args.turfGstPct) : undefined,
+        silicaSandKg: args.silicaSandKg ? Number(args.silicaSandKg) : undefined,
+        rubberGranulesKg: args.rubberGranulesKg ? Number(args.rubberGranulesKg) : undefined,
+        glueLiters: args.glueLiters ? Number(args.glueLiters) : undefined,
+        seamingTapeMeters: args.seamingTapeMeters ? Number(args.seamingTapeMeters) : undefined,
+        transportCharges: args.transportCharges ? Number(args.transportCharges) : undefined,
+        transportGstPct: args.transportGstPct !== undefined ? Number(args.transportGstPct) : undefined
       });
     }
 

@@ -1,5 +1,5 @@
 /**
- * ChatGCM 2.0 — Executive AI Command Center
+ * ChatGCM — Executive AI Command Center
  * Modern Omnichannel Engine & Live WhatsApp Web Controller
  * Official Meta Cloud API: +91 99123 99334
  */
@@ -13,6 +13,7 @@ let activeChatPhone = null;
 let activeChatLead = null;
 let pollingInterval = null;
 let noWaLeads = [];
+let sseSource = null;
 
 // Website metadata dictionary (9 Official GCM Portals)
 const GCM_WEBSITES = {
@@ -95,6 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTabNavigation();
   loadAllData();
   startAutoRefresh();
+  initSSEStream();
 
   // Listen for ESC key to close any modal
   document.addEventListener('keydown', (e) => {
@@ -129,12 +131,24 @@ function switchTab(tabId) {
   // Update Header Titles
   const headers = {
     'whatsapp-hub': [
-      'Live WhatsApp Conversation Hub',
-      'Autonomous AI customer engagement on +91 99123 99334 across all 9 GCM websites'
+      'Multi-Agent Shared Inbox (Live WhatsApp Hub)',
+      'Real-time team collaboration on +91 99123 99334 • AI auto-pilot & human manual takeover'
     ],
     'kanban': [
-      'Omnichannel Lead Pipeline (Kanban)',
-      'Visual 5-stage tracking from initial inquiry to final delivered installation'
+      'Sales Pipeline Kanban (5 Standardized States)',
+      'Real-time drag-and-drop lead state tracking • Synchronized from incoming WhatsApp messages'
+    ],
+    'meta-connection': [
+      'Meta Cloud API Connection & Webhooks',
+      'Official WhatsApp Business Platform (WABA) connection, developer webhooks & telemetry'
+    ],
+    'knowledge-rag': [
+      'Business Knowledge Base & RAG Engine',
+      'Parse PDFs, catalogs, and pricing sheets to power automated WhatsApp replies'
+    ],
+    'catalog-syncer': [
+      'E-Commerce Catalog Syncer',
+      'Manage inventory, stock status, and dispatch product cards with 0% fee UPI QR links'
     ],
     'leads': [
       'Hot Leads Master CRM',
@@ -142,7 +156,7 @@ function switchTab(tabId) {
     ],
     'quotations': [
       'Turnkey Quotations & Estimations',
-      'Sequential quotations with SBI Bank A/C 44979437825 and UPI 9912399224@sbi'
+      'Sequential quotations with SBI Bank A/C 44979437825 and UPI gcmenterprises@ybl'
     ],
     'logistics': [
       'Logistics & Bilty Docket Tracker',
@@ -253,11 +267,64 @@ async function loadWhatsAppConversations() {
   }
 }
 
+
+// ── Rich WhatsApp Message Parser & Clean Snippet Helpers ──────────────────────────
+function formatWhatsAppText(rawText) {
+  if (!rawText) return '';
+  let text = escapeHtml(rawText);
+
+  // Bold: **text** or *text*
+  text = text.replace(/\*\*(.*?)\*\*/g, '<strong class="msg-bold">$1</strong>');
+  text = text.replace(/\*([^\*\n]+)\*/g, '<strong class="msg-bold">$1</strong>');
+
+  // Italics: _text_
+  text = text.replace(/_([^_]+)_/g, '<em class="msg-italic">$1</em>');
+
+  // Strikethrough: ~text~
+  text = text.replace(/~([^~\n]+)~/g, '<del class="msg-del">$1</del>');
+
+  // Monospace code: `code`
+  text = text.replace(/`([^`\n]+)`/g, '<code class="msg-code">$1</code>');
+
+  // Currency highlighting: ₹12,345 or Rs 12,345
+  text = text.replace(/([₹Rs\.]+[\s]*[\d,]+(?:\.\d+)?)/g, '<span class="msg-currency">$1</span>');
+
+  // Bullets: lines starting with • or -
+  text = text.replace(/^[\s]*[•\-]\s*(.*)$/gm, '<div class="msg-bullet"><span class="bullet-dot">▸</span> $1</div>');
+
+  // Newlines to br
+  text = text.replace(/\n/g, '<br>');
+
+  return text;
+}
+
+function cleanThreadSnippet(rawText) {
+  if (!rawText) return 'Connected to WhatsApp';
+  let clean = String(rawText)
+    .replace(/[*_~`#]/g, '')       // strip markdown markers
+    .replace(/\s+/g, ' ')          // collapse multiple spaces and newlines
+    .trim();
+  if (clean.length > 50) {
+    clean = clean.substring(0, 48) + '...';
+  }
+  return escapeHtml(clean);
+}
+
 function renderWhatsAppThreadsList() {
   const container = document.getElementById('wa-threads-list');
   const query = (document.getElementById('wa-search-input')?.value || '').toLowerCase().trim();
 
   let filtered = allConversations.filter(c => {
+    // Team Agent Filter
+    if (selectedAgentFilter !== 'ALL') {
+      const assigned = c.assigned_agent || c.assignedAgent || '';
+      if (selectedAgentFilter === 'UNASSIGNED') {
+        if (assigned !== '') return false;
+      } else {
+        if (!assigned.toLowerCase().includes(selectedAgentFilter.toLowerCase())) return false;
+      }
+    }
+
     const custName = c.customerName || c.customer_name || '';
     const lastContent = typeof c.lastMessage === 'string' ? c.lastMessage : (c.lastMessage?.content || '');
     if (!query) return true;
@@ -283,12 +350,25 @@ function renderWhatsAppThreadsList() {
     const initial = custName.charAt(0).toUpperCase();
     const lastTime = c.lastTimestamp || c.lastMessage?.timestamp || c.updatedAt;
     const timeStr = lastTime ? formatTimestamp(lastTime) : '';
-    const lastSnippet = escapeHtml(typeof c.lastMessage === 'string' ? c.lastMessage : (c.lastMessage?.content || 'Connected to WhatsApp'));
-    const isOwner = (typeof c.lastMessage === 'object' ? c.lastMessage?.role : c.role) === 'assistant';
+    const rawMsg = typeof c.lastMessage === 'string' ? c.lastMessage : (c.lastMessage?.content || '');
+    const lastSnippet = cleanThreadSnippet(rawMsg);
+    const lastRole = typeof c.lastMessage === 'object' ? c.lastMessage?.role : c.role;
+    const isOutbound = lastRole === 'assistant' || lastRole === 'human_agent' || lastRole === 'user_owner';
     const isHuman = c.humanTakeover || c.human_takeover;
+    const priority = (c.priority || 'P2').toUpperCase();
+
+    // Delivery receipt tick
+    const receiptStatus = (c.lastReceiptStatus || c.lastMessage?.receipt || 'sent').toLowerCase();
+    let tickHtml = '';
+    if (isOutbound) {
+      if (receiptStatus === 'read') tickHtml = '<span class="tick-blue" title="Read by customer">✓✓ </span>';
+      else if (receiptStatus === 'delivered') tickHtml = '<span title="Delivered">✓✓ </span>';
+      else if (receiptStatus === 'failed') tickHtml = '<span class="tick-failed" title="Failed">⚠ </span>';
+      else tickHtml = '<span title="Sent">✓ </span>';
+    }
 
     return `
-      <div class="wa-thread-card ${isActive ? 'active' : ''}" onclick="selectConversation('${cleanPhone}')">
+      <div class="wa-thread-card ${isActive ? 'active' : ''}" onclick="selectConversation('${cleanPhone}')" data-phone="${cleanPhone}">
         <div class="wa-thread-avatar">${initial}</div>
         <div class="wa-thread-info">
           <div class="wa-thread-row">
@@ -296,8 +376,12 @@ function renderWhatsAppThreadsList() {
             <span class="wa-thread-time">${timeStr}</span>
           </div>
           <div class="wa-thread-row">
-            <span class="wa-thread-snippet">${isOwner ? '<span style="color:var(--accent-green);">You: </span>' : ''}${lastSnippet}</span>
-            ${isHuman ? '<span class="badge badge-amber" style="font-size:9px; padding:2px 4px;">Human Takeover</span>' : '<span class="badge badge-green" style="font-size:9px; padding:2px 4px;">AI Active</span>'}
+            <span class="wa-thread-snippet">${isOutbound ? '<span style="color:var(--accent-green);">' + tickHtml + 'You: </span>' : ''}${lastSnippet}</span>
+            <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
+              ${c.assigned_agent ? `<span class="agent-assigned-tag"><i class="fas fa-user-check"></i> ${escapeHtml(c.assigned_agent)}</span>` : ''}
+              <span class="thread-priority-tag ${priority.toLowerCase()}">${priority}</span>
+              ${isHuman ? '<span class="badge badge-amber" style="font-size:9px; padding:2px 4px;">Human</span>' : '<span class="badge badge-green" style="font-size:9px; padding:2px 4px;">AI</span>'}
+            </div>
           </div>
         </div>
       </div>
@@ -315,7 +399,7 @@ async function selectConversation(phone) {
   
   // Highlight active card
   document.querySelectorAll('.wa-thread-card').forEach(el => {
-    el.classList.remove('active');
+    el.classList.toggle('active', el.getAttribute('data-phone') === cleanPhone);
   });
 
   // Find thread details
@@ -326,7 +410,35 @@ async function selectConversation(phone) {
   document.getElementById('active-chat-phone').textContent = `+${cleanPhone}`;
   document.getElementById('active-chat-avatar').textContent = displayName.charAt(0).toUpperCase();
 
-  // Show action bar & composer
+  // Update Header Priority Tag & Dropdowns
+  const priorityEl = document.getElementById('active-priority-badge');
+  const prioritySelect = document.getElementById('active-thread-priority');
+  const stageSelect = document.getElementById('active-thread-stage');
+  const brandEl = document.getElementById('active-chat-brand');
+
+  const pVal = (thread?.priority || 'P2').toUpperCase();
+  if (priorityEl) {
+    priorityEl.style.display = 'inline-block';
+    priorityEl.className = `thread-priority-tag ${pVal.toLowerCase()}`;
+    priorityEl.textContent = pVal;
+  }
+  if (prioritySelect) {
+    prioritySelect.value = pVal;
+  }
+  if (stageSelect) {
+    stageSelect.value = thread?.pipeline_stage || thread?.leadStatus || activeChatLead?.pipeline_stage || 'NEW_LEAD';
+  }
+  const assignedAgentSelect = document.getElementById('active-chat-assigned-agent');
+  if (assignedAgentSelect) {
+    assignedAgentSelect.value = thread?.assigned_agent || thread?.assignedAgent || '';
+  }
+  if (brandEl) {
+    brandEl.style.display = 'inline-block';
+    brandEl.textContent = thread?.websiteDomain || thread?.websiteName || 'gcmsafetynets.in';
+  }
+  loadInternalNotes(cleanPhone);
+
+  // Show action bar, quick chips & composer
   document.getElementById('active-chat-actions').style.display = 'flex';
   document.getElementById('wa-quick-chips').style.display = 'flex';
   document.getElementById('wa-composer-area').style.display = 'flex';
@@ -368,18 +480,48 @@ function renderMessages(messages) {
   }
 
   container.innerHTML = messages.map(m => {
-    const isOutbound = m.role === 'assistant' || m.role === 'user_owner';
+    const isHumanAgent = m.role === 'human_agent' || m.role === 'user_owner';
+    const isAi = m.role === 'assistant';
+    const isOutbound = isHumanAgent || isAi;
     const isCustomer = m.role === 'user' || m.role === 'customer';
-    const bubbleClass = isOutbound ? 'outgoing' : 'incoming';
-    const senderLabel = isOutbound ? 'GCM AI / Owner (+91 99123 99334)' : (activeChatLead?.customer_name || 'Customer');
+    
+    let bubbleClass = isOutbound ? 'outgoing' : 'incoming';
+    if (isHumanAgent) bubbleClass += ' human-agent';
+
+    let senderLabel = '';
+    if (isHumanAgent) {
+      senderLabel = '👤 Gopichand | Operations Admin';
+    } else if (isAi) {
+      senderLabel = '💼 Venkatesh | GCM Technical Consultant (+91 99123 99334)';
+    } else {
+      senderLabel = activeChatLead?.customer_name || 'WhatsApp Customer';
+    }
+
     const timeStr = m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-    const formattedContent = escapeHtml(m.content || '').replace(/\n/g, '<br>');
+    const formattedContent = formatWhatsAppText(m.content || '');
+
+    // Real-Time Delivery Receipt Tick
+    let tickHtml = '';
+    if (isOutbound) {
+      const receipt = (m.receipt || 'sent').toLowerCase();
+      if (receipt === 'read') {
+        tickHtml = '<span class="tick-blue" title="Read by customer">✓✓</span>';
+      } else if (receipt === 'delivered') {
+        tickHtml = '<span title="Delivered to device">✓✓</span>';
+      } else if (receipt === 'failed') {
+        tickHtml = `<span class="tick-failed" title="Delivery Failed: ${escapeHtml(m.errorCode || '')}">⚠ Failed</span>`;
+      } else {
+        tickHtml = '<span title="Sent to WhatsApp Cloud">✓</span>';
+      }
+    }
+
+    const wamidAttr = m.wamid ? `data-wamid="${escapeHtml(m.wamid)}"` : '';
 
     return `
-      <div class="wa-message-bubble ${bubbleClass}">
+      <div class="wa-message-bubble ${bubbleClass}" ${wamidAttr}>
         <span class="wa-msg-sender">${senderLabel}</span>
         <div class="wa-msg-text">${formattedContent}</div>
-        <span class="wa-msg-meta">${timeStr} ${isOutbound ? '✓✓' : ''}</span>
+        <span class="wa-msg-meta">${timeStr} ${tickHtml}</span>
       </div>
     `;
   }).join('');
@@ -403,9 +545,9 @@ async function sendManualWhatsAppReply() {
   // Optimistically append outgoing bubble
   const container = document.getElementById('wa-messages-stream');
   const tempDiv = document.createElement('div');
-  tempDiv.className = 'wa-message-bubble outgoing';
+  tempDiv.className = 'wa-message-bubble outgoing human-agent';
   tempDiv.innerHTML = `
-    <span class="wa-msg-sender">GCM Owner (+91 99123 99334)</span>
+    <span class="wa-msg-sender">👤 Human Agent (Gopichand / Staff)</span>
     <div class="wa-msg-text">${escapeHtml(message).replace(/\n/g, '<br>')}</div>
     <span class="wa-msg-meta">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • Sending...</span>
   `;
@@ -416,12 +558,14 @@ async function sendManualWhatsAppReply() {
     const res = await fetch(`/api/whatsapp/conversations/${activeChatPhone}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message })
+      body: JSON.stringify({ message, asHuman: true })
     });
     const data = await res.json();
     if (!data.success) {
       alert('Failed to send message: ' + (data.error || 'Unknown error'));
     }
+    // Update local takeover button
+    updateAutoPilotBtn(true);
     // Refresh conversation
     loadActiveChatMessages(activeChatPhone, true);
     loadWhatsAppConversations();
@@ -430,11 +574,91 @@ async function sendManualWhatsAppReply() {
   }
 }
 
-function sendQuickReply(text) {
+function applyMacro(type) {
   const input = document.getElementById('wa-message-input');
-  if (input) {
-    input.value = text;
-    sendManualWhatsAppReply();
+  if (!input) return;
+
+  if (type === 'quote') {
+    quickSendQuoteToActiveChat();
+    return;
+  }
+
+  let text = '';
+  if (type === 'visit') {
+    text = 'Namaste! We can schedule our senior technician with our installation van to visit your site for 100% free measurement and sample demonstration today. Could you please share your exact location or Google Maps pin?';
+  } else if (type === 'bank') {
+    text = `Official GCM Enterprises Direct Settlement Details (0% Gateway Commission):\n\n` +
+           `1. ICICI Bank Current Account:\n` +
+           `   A/C No: 004805018635\n` +
+           `   IFSC: ICIC0000048\n` +
+           `   Name: GCM ENTERPRISES\n\n` +
+           `2. State Bank of India (SBI):\n` +
+           `   A/C No: 44979437825\n` +
+           `   IFSC: SBIN0021462\n` +
+           `   Name: GCM ENTERPRISES\n\n` +
+           `3. Instant UPI (Scan & Pay with GPay / PhonePe / Paytm):\n` +
+           `   UPI VPA: gcmenterprises@ybl / gcmenterprises@ybl\n` +
+           `   QR Link: https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=gcmenterprises@ybl%26pn=GCM%20ENTERPRISES%26cu=INR\n\n` +
+           `Please share payment screenshot / UTR number for instant dispatch and official GST bill.`;
+  } else if (type === 'specs') {
+    text = `Technical Material Specifications from GCM Enterprises:\n` +
+           `• Balcony Safety: 100% Virgin Nylon 6 High Tenacity (1.2mm / 15-ply, 30mm mesh, 150+ kg dynamic impact, UV stabilized).\n` +
+           `• Bird & Pigeon: UV Stabilized 0.8mm Monofilament (25mm mesh, near invisible from 10ft, humane).\n` +
+           `• Fasteners: Heavy-Duty Marine Grade AISI 316 Stainless Steel anchor fasteners.\n` +
+           `• Sports & Turf: 2.5mm Braided HDPE (40mm / 45mm mesh) with 5-year UV outdoor warranty.`;
+  } else if (type === 'owner') {
+    text = 'I am Founder & Managing Director Gopichand Mailapally. I am available to personally assist you at +91 99123 99224. Please feel free to call me directly anytime.';
+  } else if (type === 'dimensions') {
+    text = 'Namaste! Could you please share your balcony or window dimensions (Length x Height in feet)? Our engineering team will immediately prepare an exact estimation for you.';
+  } else if (type === 'photo') {
+    text = 'Could you please take a quick photo or short video of your balcony / installation area and send it here? Our senior technician will inspect it and advise the best setup.';
+  }
+
+  input.value = text;
+  input.focus();
+}
+
+async function changeThreadPriority(priority) {
+  if (!activeChatPhone) return;
+  try {
+    const res = await fetch(`/api/whatsapp/conversations/${activeChatPhone}/update-meta`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ priority })
+    });
+    const data = await res.json();
+    if (data.success) {
+      const priorityEl = document.getElementById('active-priority-badge');
+      if (priorityEl) {
+        priorityEl.className = `thread-priority-tag ${priority.toLowerCase()}`;
+        priorityEl.textContent = priority;
+      }
+      const t = allConversations.find(c => (c.phone || '').replace(/\D/g, '') === activeChatPhone);
+      if (t) t.priority = priority;
+      renderWhatsAppThreadsList();
+    }
+  } catch (err) {
+    console.error('Error changing priority:', err);
+  }
+}
+
+async function changeThreadStage(pipelineStage) {
+  if (!activeChatPhone) return;
+  try {
+    const res = await fetch(`/api/whatsapp/conversations/${activeChatPhone}/update-meta`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pipelineStage })
+    });
+    const data = await res.json();
+    if (data.success) {
+      const t = allConversations.find(c => (c.phone || '').replace(/\D/g, '') === activeChatPhone);
+      if (t) t.leadStatus = pipelineStage;
+      if (activeChatLead) activeChatLead.pipeline_stage = pipelineStage;
+      renderWhatsAppThreadsList();
+    }
+  } catch (err) {
+    console.error('Error changing stage:', err);
   }
 }
 
@@ -450,7 +674,6 @@ function quickSendQuoteToActiveChat() {
   if (lead) {
     openQuotationModal(lead.id);
   } else {
-    // Open modal with prefilled phone
     document.getElementById('dq-lead-id').value = '';
     document.getElementById('dq-customer-info').value = `Customer (+${activeChatPhone})`;
     calculateQuoteTotal();
@@ -462,34 +685,265 @@ function updateAutoPilotBtn(humanTakeover) {
   const btn = document.getElementById('btn-toggle-autopilot');
   if (!btn) return;
   if (humanTakeover) {
-    btn.className = 'btn btn-danger btn-sm';
-    btn.innerHTML = '<i class="fas fa-hand-paper"></i> Human Takeover: Active (Click to Resume AI)';
+    btn.className = 'chat-autopilot-btn human-mode';
+    btn.innerHTML = '<span class="autopilot-dot"></span><span id="autopilot-text">Human Takeover</span>';
+    btn.title = 'Human operator speaking. Click to resume autonomous AI bot.';
   } else {
-    btn.className = 'btn btn-green btn-sm';
-    btn.innerHTML = '<i class="fas fa-robot"></i> AI Auto-Pilot: ON';
+    btn.className = 'chat-autopilot-btn';
+    btn.innerHTML = '<span class="autopilot-dot"></span><span id="autopilot-text">AI Auto-Pilot: ON</span>';
+    btn.title = 'AI is autonomously conversing using RAG knowledge. Click to take over.';
   }
 }
 
 async function toggleAutoPilot() {
   if (!activeChatPhone) return;
   try {
-    const res = await fetch(`/api/whatsapp/conversations/${activeChatPhone}/resume-ai`, {
+    const res = await fetch(`/api/whatsapp/conversations/${activeChatPhone}/toggle-takeover`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
     const data = await res.json();
     if (data.success) {
-      updateAutoPilotBtn(false);
-      alert('🤖 AI Auto-Pilot resumed! ChatGCM will autonomously answer client inquiries.');
-      loadWhatsAppConversations();
+      updateAutoPilotBtn(data.humanTakeover);
+      const t = allConversations.find(c => (c.phone || '').replace(/\D/g, '') === activeChatPhone);
+      if (t) t.humanTakeover = data.humanTakeover;
+      renderWhatsAppThreadsList();
     }
   } catch (err) {
     alert('Failed to toggle autopilot: ' + err.message);
   }
 }
 
+// ── Web Audio Synthesizer Notification Chime ────────────────────────────────
+function playMessageChime(isAlert = false) {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    
+    if (isAlert) {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.1); // A5
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.35);
+    } else {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+      osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.08); // E5
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.25);
+    }
+  } catch {}
+}
+
+// ── Server-Sent Events (SSE) Live Stream Listener ────────────────────────────
+function initSSEStream() {
+  if (!window.EventSource) return;
+  if (sseSource) {
+    try { sseSource.close(); } catch {}
+  }
+
+  sseSource = new EventSource('/api/whatsapp/stream');
+
+  sseSource.onopen = () => {
+    const statusEl = document.getElementById('live-sse-status');
+    const textEl = document.getElementById('sse-status-text');
+    if (statusEl) statusEl.className = 'live-sse-badge';
+    if (textEl) textEl.textContent = '🟢 Live Stream Connected';
+  };
+
+  sseSource.addEventListener('new_message', (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      handleIncomingLiveMessage(data);
+    } catch (err) {
+      console.error('Error handling SSE new_message:', err);
+    }
+  });
+
+  sseSource.addEventListener('receipt_update', (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      handleLiveReceiptUpdate(data);
+    } catch (err) {
+      console.error('Error handling SSE receipt_update:', err);
+    }
+  });
+
+  sseSource.addEventListener('takeover_update', (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      handleLiveTakeoverUpdate(data);
+    } catch (err) {
+      console.error('Error handling SSE takeover_update:', err);
+    }
+  });
+
+    sseSource.addEventListener('kanban_update', (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      if (currentTab === 'kanban') loadKanbanBoard();
+      showToastNotification(`Pipeline auto-synced: Lead shifted to ${data.newStage}`);
+    } catch (err) {
+      console.error('Error handling SSE kanban_update:', err);
+    }
+  });
+
+  sseSource.addEventListener('agent_assigned', (e) => {
+    try {
+      loadWhatsAppConversations();
+    } catch (err) {}
+  });
+
+  sseSource.addEventListener('new_internal_note', (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      const clean = (data.phone || '').replace(/\D/g, '');
+      if (activeChatPhone === clean) {
+        loadInternalNotes(clean);
+      }
+    } catch (err) {}
+  });
+  sseSource.addEventListener('lead_update', (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      handleLiveLeadUpdate(data);
+    } catch (err) {
+      console.error('Error handling SSE lead_update:', err);
+    }
+  });
+
+  sseSource.onerror = () => {
+    const statusEl = document.getElementById('live-sse-status');
+    const textEl = document.getElementById('sse-status-text');
+    if (statusEl) statusEl.className = 'live-sse-badge reconnecting';
+    if (textEl) textEl.textContent = '🟡 Reconnecting Stream...';
+  };
+}
+
+function handleIncomingLiveMessage(data) {
+  const cleanPhone = (data.phone || '').replace(/\D/g, '');
+  const isCurrentChat = activeChatPhone === cleanPhone;
+
+  // Play audio chime
+  playMessageChime(Boolean(data.humanTakeover));
+
+  if (isCurrentChat) {
+    // If full history is provided, render it; otherwise append single message
+    if (data.allMessages && Array.isArray(data.allMessages)) {
+      renderMessages(data.allMessages);
+    } else if (data.message) {
+      const container = document.getElementById('wa-messages-stream');
+      const isCustomer = data.message.role === 'user' || data.message.role === 'customer';
+      const isHuman = data.message.role === 'human_agent';
+      let bubbleClass = isCustomer ? 'incoming' : 'outgoing';
+      if (isHuman) bubbleClass += ' human-agent';
+
+      const div = document.createElement('div');
+      div.className = `wa-message-bubble ${bubbleClass}`;
+      if (data.message.wamid) div.setAttribute('data-wamid', data.message.wamid);
+      div.innerHTML = `
+        <span class="wa-msg-sender">${isCustomer ? (activeChatLead?.customer_name || 'Customer') : (isHuman ? '👤 Gopichand | Direct' : '💼 Venkatesh | GCM Technical Consultant')}</span>
+        <div class="wa-msg-text">${escapeHtml(data.message.content || '').replace(/\n/g, '<br>')}</div>
+        <span class="wa-msg-meta">${new Date(data.message.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ${isCustomer ? '' : '✓'}</span>
+      `;
+      container.appendChild(div);
+    }
+    setTimeout(scrollToBottom, 50);
+  }
+
+  // Update in-memory threads list and UI
+  let thread = allConversations.find(c => (c.phone || '').replace(/\D/g, '') === cleanPhone);
+  if (thread) {
+    thread.lastMessage = data.message || { content: data.message?.content || 'New Message' };
+    thread.updatedAt = new Date().toISOString();
+    if (data.humanTakeover !== undefined) thread.humanTakeover = data.humanTakeover;
+  } else {
+    // Reload full list if new thread
+    loadWhatsAppConversations();
+  }
+  renderWhatsAppThreadsList();
+}
+
+function handleLiveReceiptUpdate(data) {
+  const wamid = data.wamid;
+  const status = (data.status || '').toLowerCase();
+
+  // Find message in active chat window if displayed
+  if (wamid) {
+    const bubble = document.querySelector(`.wa-message-bubble[data-wamid="${wamid}"]`);
+    if (bubble) {
+      const meta = bubble.querySelector('.wa-msg-meta');
+      if (meta) {
+        const timePart = meta.textContent.split(' ')[0] || '';
+        let tick = '✓';
+        if (status === 'read') tick = '<span class="tick-blue">✓✓</span>';
+        else if (status === 'delivered') tick = '✓✓';
+        else if (status === 'failed') tick = '<span class="tick-failed">⚠ Failed</span>';
+        meta.innerHTML = `${timePart} ${tick}`;
+      }
+    }
+  }
+
+  // Update in thread card snippet
+  const cleanPhone = (data.recipientPhone || '').replace(/\D/g, '');
+  const thread = allConversations.find(c => (c.phone || '').replace(/\D/g, '') === cleanPhone);
+  if (thread) {
+    thread.lastReceiptStatus = status;
+    renderWhatsAppThreadsList();
+  }
+}
+
+function handleLiveTakeoverUpdate(data) {
+  const cleanPhone = (data.phone || '').replace(/\D/g, '');
+  if (activeChatPhone === cleanPhone) {
+    updateAutoPilotBtn(data.humanTakeover);
+  }
+  const thread = allConversations.find(c => (c.phone || '').replace(/\D/g, '') === cleanPhone);
+  if (thread) {
+    thread.humanTakeover = data.humanTakeover;
+    renderWhatsAppThreadsList();
+  }
+}
+
+function handleLiveLeadUpdate(data) {
+  const cleanPhone = (data.phone || '').replace(/\D/g, '');
+  const thread = allConversations.find(c => (c.phone || '').replace(/\D/g, '') === cleanPhone);
+  if (thread) {
+    if (data.priority) thread.priority = data.priority;
+    if (data.pipelineStage) thread.leadStatus = data.pipelineStage;
+    renderWhatsAppThreadsList();
+  }
+  if (activeChatPhone === cleanPhone) {
+    if (data.priority) {
+      const priorityEl = document.getElementById('active-priority-badge');
+      const prioritySelect = document.getElementById('active-thread-priority');
+      if (priorityEl) {
+        priorityEl.className = `thread-priority-tag ${data.priority.toLowerCase()}`;
+        priorityEl.textContent = data.priority;
+      }
+      if (prioritySelect) prioritySelect.value = data.priority;
+    }
+    if (data.pipelineStage) {
+      const stageSelect = document.getElementById('active-thread-stage');
+      if (stageSelect) stageSelect.value = data.pipelineStage;
+    }
+  }
+}
+
 // ── 2. Visual 5-Stage Kanban Board ─────────────────────────────────────────────
 function renderKanbanBoard() {
+  loadKanbanBoard();
+  return;
+  // Legacy implementation bypassed for 5-stage B2B Kanban
+
   const cols = {
     new: document.getElementById('cards-kanban-new'),
     engaging: document.getElementById('cards-kanban-engaging'),
@@ -1499,3 +1953,932 @@ function openWhatsAppForPhone(phoneClean) {
   switchTab('whatsapp-hub');
   loadActiveChatMessages(phoneClean, true);
 }
+
+// ── Direct Corporate Bank Transfer & Zero-Fee UPI Settlement Handlers ─────────
+function openBankDetailsModal() {
+  const modal = document.getElementById('modal-bank-details');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function updateBankModalQR(amt) {
+  const qrImg = document.getElementById('modal-bank-qr-img');
+  if (!qrImg) return;
+  const num = Number(amt) || 0;
+  const amtParam = num > 0 ? `%26am=${num}` : '';
+  qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=gcmenterprises@ybl%26pn=GCM%20ENTERPRISES${amtParam}%26cu=INR`;
+}
+
+function copyText(str) {
+  navigator.clipboard.writeText(str).then(() => {
+    alert(`Copied to clipboard: ${str}`);
+  }).catch(() => {
+    prompt('Copy to clipboard:', str);
+  });
+}
+
+function copyFullBankDetails() {
+  const text = `🏛️ GCM ENTERPRISES — OFFICIAL SETTLEMENT DETAILS\n` +
+    `Zero Gateway Fee • Direct Corporate Bank Settlement\n\n` +
+    `🔹 STATE BANK OF INDIA (PRIMARY)\n` +
+    `• Account Name: GCM ENTERPRISES\n` +
+    `• Current A/C No: 44979437825\n` +
+    `• IFSC Code: SBIN0021462\n` +
+    `• Branch: Greenpark Colony Branch, Hyderabad\n\n` +
+    `🔹 ICICI BANK LIMITED\n` +
+    `• Account Name: GCM ENTERPRISES\n` +
+    `• Current A/C No: 000805021234\n` +
+    `• IFSC Code: ICIC0000008\n` +
+    `• Branch: Banjara Hills, Hyderabad\n\n` +
+    `📲 0% COMMISSION UPI HANDLES:\n` +
+    `• PhonePe / Google Pay: 9912399224\n` +
+    `• UPI VPA: gcmenterprises@ybl / gcmenterprises@ybl\n` +
+    `• QR Link: https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=gcmenterprises@ybl%26pn=GCM%20ENTERPRISES%26cu=INR\n`;
+
+  navigator.clipboard.writeText(text).then(() => {
+    alert('Complete GCM Bank & UPI credentials copied to clipboard!');
+  }).catch(() => {
+    prompt('Copy credentials:', text);
+  });
+}
+
+async function dispatchBankDetailsToChat() {
+  if (!activeChatPhone) {
+    alert('Please select an active WhatsApp conversation first.');
+    return;
+  }
+
+  const amtInput = document.getElementById('bank-qr-custom-amount');
+  const amount = amtInput ? amtInput.value : '';
+
+  try {
+    const res = await fetch(`/api/whatsapp/conversations/${activeChatPhone}/send-bank-details`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount: amount || undefined,
+        note: 'Order Booking / Advance Settlement'
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      closeModal('modal-bank-details');
+      playChime('sent');
+      loadActiveChatMessages(activeChatPhone, true);
+    } else {
+      alert('Error sending bank details: ' + (data.error || 'Failed'));
+    }
+  } catch (err) {
+    console.error('Failed to send bank details:', err);
+    alert('Network error while dispatching bank details.');
+  }
+}
+
+// Explicit window bindings for inline HTML onclick handlers
+window.openBankDetailsModal = openBankDetailsModal;
+window.updateBankModalQR = updateBankModalQR;
+window.copyText = copyText;
+window.copyFullBankDetails = copyFullBankDetails;
+window.dispatchBankDetailsToChat = dispatchBankDetailsToChat;
+
+
+
+// ==============================================================================
+// B2B SAAS PILLAR 1: META CLOUD API CONNECTION MODULE
+// ==============================================================================
+
+async function loadMetaConnections() {
+  try {
+    const res = await fetch('/api/admin/meta/connections');
+    const data = await res.json();
+    if (data.success) {
+      if (document.getElementById('meta-webhook-url')) {
+        document.getElementById('meta-webhook-url').value = data.webhookEndpoint || 'https://chatgcm.in/api/whatsapp/webhook';
+      }
+      if (document.getElementById('meta-verify-token')) {
+        document.getElementById('meta-verify-token').value = data.verifyToken || 'gcm_whatsapp_verify_2026';
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load Meta connections:', err);
+  }
+}
+
+function copyMetaText(text, btnElement) {
+  navigator.clipboard.writeText(text).then(() => {
+    const origHtml = btnElement.innerHTML;
+    btnElement.innerHTML = '<i class="fas fa-check" style="color:#10b981;"></i> Copied!';
+    btnElement.classList.add('btn-green');
+    setTimeout(() => {
+      btnElement.innerHTML = origHtml;
+      btnElement.classList.remove('btn-green');
+    }, 2000);
+  }).catch(() => {
+    prompt('Copy value:', text);
+  });
+}
+
+async function sendMetaTestPing() {
+  const phoneInput = document.getElementById('meta-ping-phone');
+  const outPre = document.getElementById('meta-ping-output');
+  const btn = document.getElementById('btn-meta-test-ping');
+
+  const phone = phoneInput ? phoneInput.value.trim() : '';
+  if (!phone) {
+    alert('Please enter a recipient phone number (e.g. +91 99123 99334)');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Dispatching Handshake...';
+  outPre.textContent = `Connecting to Meta Cloud API graph node via srv1629697.hstgr.cloud...
+Target: ${phone}`;
+
+  try {
+    const res = await fetch('/api/admin/meta/test-ping', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      outPre.textContent = `⚡ HANDSHAKE SUCCESSFUL (200 OK)
+Timestamp: ${new Date().toISOString()}
+WAMID: ${data.details?.data?.messages?.[0]?.id || 'Verified'}
+Recipient: ${phone}
+Status: Enqueued on WhatsApp Business Platform`;
+      playChime('sent');
+      loadMetaTelemetry();
+    } else {
+      outPre.textContent = `❌ HANDSHAKE FAILED
+Response: ${JSON.stringify(data, null, 2)}`;
+    }
+  } catch (err) {
+    outPre.textContent = `❌ NETWORK ERROR: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-bolt"></i> Send Meta Cloud Test Ping';
+  }
+}
+
+async function loadMetaTelemetry() {
+  const tbody = document.getElementById('meta-telemetry-tbody');
+  if (!tbody) return;
+
+  try {
+    const res = await fetch('/api/admin/meta/telemetry');
+    const data = await res.json();
+    if (data.success) {
+      const receipts = data.receipts || [];
+      if (receipts.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-muted);">No webhook telemetry events recorded yet.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = receipts.map(r => {
+        let statusClass = 'badge-green';
+        if (r.receipt_status === 'failed') statusClass = 'badge-red';
+        else if (r.receipt_status === 'sent') statusClass = 'badge-cyan';
+        else if (r.receipt_status === 'read') statusClass = 'badge-indigo';
+
+        return `
+          <tr>
+            <td style="font-size:12px; color:var(--text-secondary);">${formatTimestamp(r.created_at)}</td>
+            <td style="font-family:monospace; font-size:11px; color:#38bdf8;">${escapeHtml(r.wamid || '--')}</td>
+            <td style="font-size:12px; font-weight:600;">${escapeHtml(r.phone_number || '--')}</td>
+            <td><span class="badge ${statusClass}">${(r.receipt_status || 'UNKNOWN').toUpperCase()}</span></td>
+            <td style="font-family:monospace; font-size:10.5px; color:var(--text-muted);">${escapeHtml(r.idempotency_key ? r.idempotency_key.substring(0, 16) + '...' : '--')}</td>
+            <td><span style="color:#10b981; font-size:11px;"><i class="fas fa-check-double"></i> Verified</span></td>
+          </tr>
+        `;
+      }).join('');
+    }
+  } catch (err) {
+    console.error('Failed to load telemetry:', err);
+  }
+}
+
+
+// ==============================================================================
+// B2B SAAS PILLAR 2: MULTI-AGENT SHARED INBOX & PRIVATE TEAM NOTES
+// ==============================================================================
+
+let selectedAgentFilter = 'ALL';
+
+function filterThreadsByAgent(agentName) {
+  selectedAgentFilter = agentName;
+  filterWhatsAppThreads();
+}
+
+async function changeActiveAssignedAgent(agentName) {
+  if (!activeChatPhone) return;
+
+  try {
+    const res = await fetch(`/api/whatsapp/conversations/${activeChatPhone}/assign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentName })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToastNotification(`Conversation assigned to ${agentName || 'Unassigned'}`);
+      loadWhatsAppConversations();
+    }
+  } catch (err) {
+    console.error('Failed to assign agent:', err);
+  }
+}
+
+function toggleInternalNotesDrawer() {
+  const drawer = document.getElementById('wa-internal-notes-drawer');
+  if (!drawer) return;
+
+  if (drawer.style.display === 'none' || drawer.style.display === '') {
+    drawer.style.display = 'flex';
+    if (activeChatPhone) {
+      loadInternalNotes(activeChatPhone);
+    }
+  } else {
+    drawer.style.display = 'none';
+  }
+}
+
+async function loadInternalNotes(phone) {
+  const listEl = document.getElementById('active-internal-notes-list');
+  const badgeEl = document.getElementById('active-notes-count');
+  if (!listEl) return;
+
+  try {
+    const res = await fetch(`/api/whatsapp/conversations/${phone}/internal-notes`);
+    const data = await res.json();
+    if (data.success) {
+      const notes = data.notes || [];
+      if (badgeEl) {
+        badgeEl.textContent = notes.length;
+        badgeEl.style.display = notes.length > 0 ? 'inline-block' : 'none';
+      }
+
+      if (notes.length === 0) {
+        listEl.innerHTML = `
+          <div style="text-align:center; padding:24px; color:var(--text-muted); font-size:12px;">
+            <i class="fas fa-lock" style="font-size:24px; color:#f59e0b; margin-bottom:8px; display:block;"></i>
+            No private notes yet. Write handover instructions or internal customer preferences below.
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = notes.map(n => `
+        <div class="internal-note-card">
+          <div class="internal-note-meta">
+            <span style="font-weight:700; color:#f59e0b;"><i class="fas fa-user-shield"></i> ${escapeHtml(n.author || 'Team Member')}</span>
+            <span>${formatTimestamp(n.created_at)}</span>
+          </div>
+          <div class="internal-note-text">${escapeHtml(n.note || '')}</div>
+        </div>
+      `).join('');
+      listEl.scrollTop = listEl.scrollHeight;
+    }
+  } catch (err) {
+    console.error('Failed to load internal notes:', err);
+  }
+}
+
+async function submitInternalTeamNote() {
+  if (!activeChatPhone) {
+    alert('Please select an active conversation first.');
+    return;
+  }
+
+  const inputEl = document.getElementById('internal-note-input');
+  const note = inputEl ? inputEl.value.trim() : '';
+  if (!note) return;
+
+  try {
+    const res = await fetch(`/api/whatsapp/conversations/${activeChatPhone}/internal-notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        note,
+        author: 'Gopichand (Master Admin)'
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      inputEl.value = '';
+      loadInternalNotes(activeChatPhone);
+      showToastNotification('Private internal note saved.');
+    }
+  } catch (err) {
+    console.error('Failed to save internal note:', err);
+  }
+}
+
+
+// ==============================================================================
+// B2B SAAS PILLAR 3: BUSINESS KNOWLEDGE BASE & RAG ENGINE
+// ==============================================================================
+
+async function loadKnowledgeDocuments() {
+  const tbody = document.getElementById('kb-documents-tbody');
+  const countBadge = document.getElementById('kb-doc-count-badge');
+  if (!tbody) return;
+
+  try {
+    const res = await fetch('/api/admin/knowledge/documents');
+    const data = await res.json();
+    if (data.success) {
+      const docs = data.documents || [];
+      if (countBadge) countBadge.textContent = `${docs.length} Documents`;
+
+      if (docs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-muted);">No documents indexed yet. Ingest your first document above.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = docs.map(d => `
+        <tr>
+          <td>
+            <div style="font-weight:700; color:#fff;">${escapeHtml(d.original_name || d.filename)}</div>
+            <div style="font-size:11px; color:var(--text-muted);">${escapeHtml(d.summary || '')}</div>
+          </td>
+          <td><span class="badge badge-amber">${escapeHtml(d.file_type || 'DOCUMENT')}</span></td>
+          <td style="font-weight:700; color:#10b981;">${d.chunk_count || d.chunks_count || 1} chunks</td>
+          <td><span class="badge badge-green"><i class="fas fa-check"></i> INDEXED</span></td>
+          <td>
+            <button class="btn btn-danger btn-xs" onclick="deleteKnowledgeDocument('${d.id}')" title="Delete Document">
+              <i class="fas fa-trash"></i>
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+  } catch (err) {
+    console.error('Failed to load documents:', err);
+  }
+}
+
+async function uploadKnowledgeDocument() {
+  const title = document.getElementById('kb-doc-title').value.trim();
+  const fileType = document.getElementById('kb-doc-type').value;
+  const summary = document.getElementById('kb-doc-summary').value.trim();
+  const content = document.getElementById('kb-doc-content').value.trim();
+
+  if (!title || !content) {
+    alert('Please enter a Document Title and paste the Content.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/admin/knowledge/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: title, fileType, summary, content })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      alert(`Success: ${data.message}`);
+      document.getElementById('kb-doc-title').value = '';
+      document.getElementById('kb-doc-summary').value = '';
+      document.getElementById('kb-doc-content').value = '';
+      loadKnowledgeDocuments();
+    } else {
+      alert('Upload failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch (err) {
+    console.error('Failed to upload document:', err);
+  }
+}
+
+async function deleteKnowledgeDocument(docId) {
+  if (!confirm('Are you sure you want to delete this document and all its indexed RAG knowledge chunks?')) return;
+
+  try {
+    const res = await fetch(`/api/admin/knowledge/documents/${docId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      loadKnowledgeDocuments();
+    }
+  } catch (err) {
+    console.error('Failed to delete document:', err);
+  }
+}
+
+async function loadSystemConfig() {
+  try {
+    const res = await fetch('/api/admin/knowledge/system-config');
+    const data = await res.json();
+    if (data.success && data.config) {
+      const c = data.config;
+      if (document.getElementById('kb-sys-business-name')) document.getElementById('kb-sys-business-name').value = c.business_name || '';
+      if (document.getElementById('kb-sys-tone')) document.getElementById('kb-sys-tone').value = c.persona_tone || '';
+      if (document.getElementById('kb-sys-instruction')) document.getElementById('kb-sys-instruction').value = c.system_instruction || '';
+      if (document.getElementById('kb-sys-fallback')) document.getElementById('kb-sys-fallback').value = c.fallback_reply || '';
+    }
+  } catch (err) {
+    console.error('Failed to load system config:', err);
+  }
+}
+
+async function saveSystemConfig() {
+  const businessName = document.getElementById('kb-sys-business-name').value.trim();
+  const personaTone = document.getElementById('kb-sys-tone').value.trim();
+  const systemInstruction = document.getElementById('kb-sys-instruction').value.trim();
+  const fallbackReply = document.getElementById('kb-sys-fallback').value.trim();
+
+  try {
+    const res = await fetch('/api/admin/knowledge/system-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ businessName, personaTone, systemInstruction, fallbackReply })
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert('AI System Prompt & Business Instructions successfully saved.');
+    }
+  } catch (err) {
+    console.error('Failed to save system config:', err);
+  }
+}
+
+async function testRAGQuery() {
+  const query = document.getElementById('rag-test-query').value.trim();
+  if (!query) return;
+
+  const container = document.getElementById('rag-test-results-container');
+  const chunksList = document.getElementById('rag-matched-chunks-list');
+  const previewBox = document.getElementById('rag-synthesized-preview');
+
+  try {
+    const res = await fetch('/api/admin/knowledge/test-rag', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      container.style.display = 'block';
+      const chunks = data.matchedChunks || [];
+      chunksList.innerHTML = chunks.map(c => `
+        <div style="background:rgba(245, 158, 11, 0.1); border:1px solid rgba(245, 158, 11, 0.25); border-radius:6px; padding:8px; font-size:11px;">
+          <strong style="color:#f59e0b;">${escapeHtml(c.title || c.document_name || 'Chunk')}:</strong>
+          <span style="color:#e2e8f0;">${escapeHtml((c.content || '').substring(0, 150))}...</span>
+        </div>
+      `).join('');
+
+      previewBox.textContent = data.synthesizedReplyPreview || 'Reply generated.';
+    }
+  } catch (err) {
+    console.error('Failed to test RAG:', err);
+  }
+}
+
+
+// ==============================================================================
+// B2B SAAS PILLAR 4: SALES PIPELINE KANBAN (5 STANDARDIZED STATES)
+// ==============================================================================
+
+let draggedLeadId = null;
+
+async function loadKanbanBoard() {
+  const cols = {
+    NEW_LEAD: document.getElementById('cards-kanban-new-lead'),
+    CONTACTED: document.getElementById('cards-kanban-contacted'),
+    QUOTE_SENT: document.getElementById('cards-kanban-quote-sent'),
+    WON: document.getElementById('cards-kanban-won'),
+    LOST: document.getElementById('cards-kanban-lost')
+  };
+
+  const badgeCounts = {
+    NEW_LEAD: document.getElementById('count-kanban-new-lead'),
+    CONTACTED: document.getElementById('count-kanban-contacted'),
+    QUOTE_SENT: document.getElementById('count-kanban-quote-sent'),
+    WON: document.getElementById('count-kanban-won'),
+    LOST: document.getElementById('count-kanban-lost')
+  };
+
+  // Clear columns
+  Object.values(cols).forEach(c => { if (c) c.innerHTML = ''; });
+
+  try {
+    const res = await fetch('/api/admin/crm/kanban-leads');
+    const data = await res.json();
+
+    if (data.success && data.kanban) {
+      const kanban = data.kanban;
+
+      Object.keys(cols).forEach(stage => {
+        const leads = kanban[stage] || [];
+        if (badgeCounts[stage]) badgeCounts[stage].textContent = leads.length;
+
+        if (cols[stage]) {
+          if (leads.length === 0) {
+            cols[stage].innerHTML = `
+              <div style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 12px;">
+                No leads in this stage
+              </div>
+            `;
+          } else {
+            cols[stage].innerHTML = leads.map(l => createKanbanCard5Html(l, stage)).join('');
+          }
+        }
+      });
+    }
+  } catch (err) {
+    console.error('Failed to load Kanban board:', err);
+  }
+}
+
+function createKanbanCard5Html(lead, currentStage) {
+  const site = GCM_WEBSITES[lead.website_id] || { name: lead.brand_name || lead.website_id || 'GCM Netting', badgeClass: 'badge-blue' };
+  const val = lead.estimated_value > 0 ? `₹${Number(lead.estimated_value).toLocaleString('en-IN')}` : '₹--';
+  const cleanPhone = (lead.whatsapp_number || lead.phone || '').replace(/\D/g, '');
+
+  let nextStageBtn = '';
+  if (currentStage === 'NEW_LEAD') {
+    nextStageBtn = `<button class="kanban-btn-advance" onclick="moveKanbanLeadStage('${lead.id}', 'CONTACTED')">Contact &rarr;</button>`;
+  } else if (currentStage === 'CONTACTED') {
+    nextStageBtn = `<button class="kanban-btn-advance" onclick="moveKanbanLeadStage('${lead.id}', 'QUOTE_SENT')">Quote &rarr;</button>`;
+  } else if (currentStage === 'QUOTE_SENT') {
+    nextStageBtn = `<button class="kanban-btn-advance" style="color:#10b981; border-color:rgba(16,185,129,0.3);" onclick="moveKanbanLeadStage('${lead.id}', 'WON')">Won 🏆</button>`;
+  }
+
+  return `
+    <div class="kanban-card" draggable="true" ondragstart="handleKanbanDragStart(event, '${lead.id}')" onclick="openWhatsAppChat('${cleanPhone}')">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+        <span class="badge ${site.badgeClass}" style="font-size:10px;">${escapeHtml(site.name)}</span>
+        <span style="font-size:12px; font-weight:800; color:var(--accent-amber);">${val}</span>
+      </div>
+
+      <div style="font-weight:700; color:#fff; font-size:13.5px; margin-bottom:2px;">
+        ${escapeHtml(lead.customer_name || 'Inbound Prospect')}
+      </div>
+
+      <div style="font-size:11.5px; color:var(--text-muted); display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+        <i class="fab fa-whatsapp" style="color:var(--accent-green);"></i> +91 ${cleanPhone.slice(-10)}
+        ${lead.city ? `&bull; <span>${escapeHtml(lead.city)}</span>` : ''}
+      </div>
+
+      <div style="font-size:12px; color:var(--text-secondary); line-height:1.3; margin-bottom:8px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">
+        ${escapeHtml(lead.requirement_summary || lead.message || 'Requirements pending')}
+      </div>
+
+      <div class="kanban-quick-actions" onclick="event.stopPropagation()">
+        ${nextStageBtn}
+        ${currentStage !== 'WON' ? `<button class="kanban-btn-advance" onclick="moveKanbanLeadStage('${lead.id}', 'WON')">Won</button>` : ''}
+        ${currentStage !== 'LOST' ? `<button class="kanban-btn-advance" onclick="moveKanbanLeadStage('${lead.id}', 'LOST')">Lost</button>` : ''}
+        <button class="kanban-btn-advance" onclick="openWhatsAppChat('${cleanPhone}')"><i class="fab fa-whatsapp" style="color:var(--accent-green);"></i> Chat</button>
+      </div>
+    </div>
+  `;
+}
+
+function handleKanbanDragStart(event, leadId) {
+  draggedLeadId = leadId;
+  event.dataTransfer.setData('text/plain', leadId);
+}
+
+function allowKanbanDrop(event) {
+  event.preventDefault();
+  event.currentTarget.classList.add('drag-over');
+}
+
+function handleKanbanDragLeave(event) {
+  event.currentTarget.classList.remove('drag-over');
+}
+
+async function handleKanbanDrop(event, targetStage) {
+  event.preventDefault();
+  event.currentTarget.classList.remove('drag-over');
+
+  const leadId = event.dataTransfer.getData('text/plain') || draggedLeadId;
+  if (!leadId) return;
+
+  await moveKanbanLeadStage(leadId, targetStage);
+}
+
+async function moveKanbanLeadStage(leadId, targetStage) {
+  try {
+    const res = await fetch(`/api/admin/crm/leads/${leadId}/stage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stage: targetStage,
+        performedBy: 'Gopichand (Master Admin)'
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      loadKanbanBoard();
+      playChime('ping');
+    }
+  } catch (err) {
+    console.error('Failed to move lead stage:', err);
+  }
+}
+
+
+// ==============================================================================
+// B2B SAAS PILLAR 5: E-COMMERCE CATALOG SYNCER
+// ==============================================================================
+
+let catalogItemsCache = [];
+let selectedCatalogCategory = 'ALL';
+
+async function loadCatalogItems() {
+  const tbody = document.getElementById('catalog-table-tbody');
+  const countAll = document.getElementById('cat-count-all');
+  if (!tbody) return;
+
+  try {
+    const res = await fetch('/api/admin/catalog/items');
+    const data = await res.json();
+
+    if (data.success) {
+      catalogItemsCache = data.items || [];
+      if (countAll) countAll.textContent = catalogItemsCache.length;
+      renderCatalogTable();
+    }
+  } catch (err) {
+    console.error('Failed to load catalog items:', err);
+  }
+}
+
+function filterCatalogCategory(category) {
+  selectedCatalogCategory = category;
+  document.querySelectorAll('#tab-catalog-syncer .brand-pill').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.includes(category) || (category === 'ALL' && btn.textContent.includes('All')));
+  });
+  renderCatalogTable();
+}
+
+function renderCatalogTable() {
+  const tbody = document.getElementById('catalog-table-tbody');
+  if (!tbody) return;
+
+  const filtered = catalogItemsCache.filter(item => {
+    if (selectedCatalogCategory === 'ALL') return true;
+    return (item.category || '').toUpperCase().includes(selectedCatalogCategory);
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:var(--text-muted);">No products found in this category.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(item => {
+    let stockClass = 'in';
+    let stockText = 'In Stock';
+    if (item.stock_status === 'LOW_STOCK') { stockClass = 'low'; stockText = 'Low Stock'; }
+    else if (item.stock_status === 'OUT_OF_STOCK') { stockClass = 'out'; stockText = 'Out of Stock'; }
+
+    return `
+      <tr>
+        <td>
+          <div style="font-weight:700; color:#fff;">${escapeHtml(item.product_name)}</div>
+          <div style="font-family:monospace; font-size:11px; color:#38bdf8;">SKU: ${escapeHtml(item.sku || item.id)}</div>
+        </td>
+        <td>
+          <span class="badge badge-indigo">${escapeHtml(item.category)}</span>
+          <span style="font-size:11px; color:var(--text-muted); display:block; margin-top:2px;">${escapeHtml(item.brand || 'GCM')}</span>
+        </td>
+        <td style="font-weight:700; color:#10b981; font-size:13px;">₹${Number(item.price || 0).toLocaleString('en-IN')}/${escapeHtml(item.unit || 'SFT')}</td>
+        <td><span class="badge badge-amber">+${item.gst_pct || 18}%</span></td>
+        <td><span class="stock-pill ${stockClass}">${stockText}</span></td>
+        <td>${item.warranty_years || 5} Years</td>
+        <td>
+          <button class="btn btn-green btn-xs" onclick="openSendCatalogModal('${item.id}')" title="Send WhatsApp Message with Dynamic 0% Fee UPI QR">
+            <i class="fab fa-whatsapp"></i> Send to Chat
+          </button>
+        </td>
+        <td>
+          <button class="btn btn-outline btn-xs" onclick="editCatalogProduct('${item.id}')"><i class="fas fa-edit"></i></button>
+          <button class="btn btn-danger btn-xs" onclick="deleteCatalogProduct('${item.id}')"><i class="fas fa-trash"></i></button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function openAddCatalogModal(item = null) {
+  document.getElementById('prod-edit-id').value = item ? item.id : '';
+  document.getElementById('prod-name').value = item ? item.product_name : '';
+  document.getElementById('prod-brand').value = item ? item.brand : 'RUSSEA';
+  document.getElementById('prod-category').value = item ? item.category : 'SAFETY_NETS';
+  document.getElementById('prod-price').value = item ? item.price : 28;
+  document.getElementById('prod-unit').value = item ? item.unit : 'SFT';
+  document.getElementById('prod-gst').value = item ? item.gst_pct : 18;
+  document.getElementById('prod-stock').value = item ? item.stock_status : 'IN_STOCK';
+  document.getElementById('prod-warranty').value = item ? item.warranty_years : 5;
+  document.getElementById('prod-spec').value = item ? item.specification : '';
+
+  document.getElementById('modal-catalog-title').innerHTML = item ?
+    '<i class="fas fa-edit" style="color:var(--accent-indigo);"></i> Edit Catalog Product' :
+    '<i class="fas fa-box-open" style="color:var(--accent-indigo);"></i> Add Product to Catalog';
+
+  openModal('modal-catalog-item');
+}
+
+function editCatalogProduct(id) {
+  const item = catalogItemsCache.find(x => x.id === id);
+  if (item) openAddCatalogModal(item);
+}
+
+async function saveCatalogProduct() {
+  const id = document.getElementById('prod-edit-id').value;
+  const productName = document.getElementById('prod-name').value.trim();
+  const brand = document.getElementById('prod-brand').value.trim();
+  const category = document.getElementById('prod-category').value;
+  const price = parseFloat(document.getElementById('prod-price').value) || 0;
+  const unit = document.getElementById('prod-unit').value.trim();
+  const gstPct = parseFloat(document.getElementById('prod-gst').value) || 18;
+  const stockStatus = document.getElementById('prod-stock').value;
+  const warrantyYears = parseInt(document.getElementById('prod-warranty').value) || 5;
+  const specification = document.getElementById('prod-spec').value.trim();
+
+  if (!productName) {
+    alert('Please enter a product name');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/admin/catalog/items', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: id || undefined,
+        productName,
+        brand,
+        category,
+        price,
+        unit,
+        gstPct,
+        stockStatus,
+        warrantyYears,
+        specification
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      closeModal('modal-catalog-item');
+      loadCatalogItems();
+      showToastNotification('Product saved to catalog.');
+    }
+  } catch (err) {
+    console.error('Failed to save product:', err);
+  }
+}
+
+async function deleteCatalogProduct(id) {
+  if (!confirm('Are you sure you want to remove this product from the inventory catalog?')) return;
+
+  try {
+    const res = await fetch(`/api/admin/catalog/items/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      loadCatalogItems();
+    }
+  } catch (err) {
+    console.error('Failed to delete product:', err);
+  }
+}
+
+function openSendCatalogModal(productId = null) {
+  const phoneInput = document.getElementById('dispatch-prod-phone');
+  const selectEl = document.getElementById('dispatch-prod-select');
+
+  if (phoneInput) {
+    phoneInput.value = activeChatPhone ? `+91 ${activeChatPhone.replace(/\D/g, '').slice(-10)}` : '';
+  }
+
+  if (selectEl && catalogItemsCache.length > 0) {
+    selectEl.innerHTML = catalogItemsCache.map(p => `
+      <option value="${p.id}" ${p.id === productId ? 'selected' : ''}>
+        ${escapeHtml(p.product_name)} — ₹${p.price}/${p.unit} (+${p.gst_pct}% GST)
+      </option>
+    `).join('');
+  }
+
+  updateDispatchTotal();
+  openModal('modal-send-catalog');
+}
+
+function updateDispatchTotal() {
+  const selectEl = document.getElementById('dispatch-prod-select');
+  const qtyEl = document.getElementById('dispatch-prod-qty');
+  const totalEl = document.getElementById('dispatch-calc-total');
+
+  if (!selectEl || !qtyEl || !totalEl) return;
+
+  const prodId = selectEl.value;
+  const qty = parseFloat(qtyEl.value) || 1;
+  const prod = catalogItemsCache.find(x => x.id === prodId);
+
+  if (prod) {
+    const subtotal = (prod.price || 0) * qty;
+    const gst = subtotal * ((prod.gst_pct || 18) / 100);
+    const grand = Math.round(subtotal + gst);
+    totalEl.textContent = `₹${grand.toLocaleString('en-IN')}`;
+  }
+}
+
+async function dispatchCatalogProductToActiveChat() {
+  const phoneInput = document.getElementById('dispatch-prod-phone');
+  const selectEl = document.getElementById('dispatch-prod-select');
+  const qtyEl = document.getElementById('dispatch-prod-qty');
+
+  const phone = phoneInput ? phoneInput.value.trim() : '';
+  const productId = selectEl ? selectEl.value : '';
+  const quantity = qtyEl ? parseFloat(qtyEl.value) || 1 : 1;
+
+  if (!phone || !productId) {
+    alert('Please enter a target phone number and select a product.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/admin/catalog/send-product', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, productId, quantity })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      closeModal('modal-send-catalog');
+      playChime('sent');
+      showToastNotification('Product card and 0% fee UPI QR dispatched to WhatsApp!');
+      if (activeChatPhone && activeChatPhone.includes(phone.replace(/\D/g, '').slice(-10))) {
+        loadActiveChatMessages(activeChatPhone, true);
+      }
+    } else {
+      alert('Failed to send product: ' + (data.error || 'Check WhatsApp API connection'));
+    }
+  } catch (err) {
+    console.error('Failed to dispatch product:', err);
+  }
+}
+
+
+// ==============================================================================
+// TOAST NOTIFICATIONS & GLOBAL BINDINGS
+// ==============================================================================
+
+function showToastNotification(msg) {
+  let toast = document.getElementById('live-toast-notification');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'live-toast-notification';
+    toast.style.cssText = 'position:fixed; bottom:24px; right:24px; background:#0f172a; border:1px solid #10b981; color:#fff; padding:12px 18px; border-radius:8px; font-size:12.5px; z-index:9999; box-shadow:0 10px 25px rgba(0,0,0,0.5); display:flex; align-items:center; gap:8px; transition:all 0.3s;';
+    document.body.appendChild(toast);
+  }
+  toast.innerHTML = `<i class="fas fa-check-circle" style="color:#10b981;"></i> ${msg}`;
+  toast.style.opacity = '1';
+  toast.style.transform = 'translateY(0)';
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+  }, 3500);
+}
+
+// Attach all B2B SaaS methods to window for inline HTML onclick/onchange/ondrag
+window.loadMetaConnections = loadMetaConnections;
+window.copyMetaText = copyMetaText;
+window.sendMetaTestPing = sendMetaTestPing;
+window.loadMetaTelemetry = loadMetaTelemetry;
+
+window.filterThreadsByAgent = filterThreadsByAgent;
+window.changeActiveAssignedAgent = changeActiveAssignedAgent;
+window.toggleInternalNotesDrawer = toggleInternalNotesDrawer;
+window.loadInternalNotes = loadInternalNotes;
+window.submitInternalTeamNote = submitInternalTeamNote;
+
+window.loadKnowledgeDocuments = loadKnowledgeDocuments;
+window.uploadKnowledgeDocument = uploadKnowledgeDocument;
+window.deleteKnowledgeDocument = deleteKnowledgeDocument;
+window.loadSystemConfig = loadSystemConfig;
+window.saveSystemConfig = saveSystemConfig;
+window.testRAGQuery = testRAGQuery;
+
+window.loadKanbanBoard = loadKanbanBoard;
+window.handleKanbanDragStart = handleKanbanDragStart;
+window.allowKanbanDrop = allowKanbanDrop;
+window.handleKanbanDragLeave = handleKanbanDragLeave;
+window.handleKanbanDrop = handleKanbanDrop;
+window.moveKanbanLeadStage = moveKanbanLeadStage;
+
+window.loadCatalogItems = loadCatalogItems;
+window.filterCatalogCategory = filterCatalogCategory;
+window.openAddCatalogModal = openAddCatalogModal;
+window.editCatalogProduct = editCatalogProduct;
+window.saveCatalogProduct = saveCatalogProduct;
+window.deleteCatalogProduct = deleteCatalogProduct;
+window.openSendCatalogModal = openSendCatalogModal;
+window.updateDispatchTotal = updateDispatchTotal;
+window.dispatchCatalogProductToActiveChat = dispatchCatalogProductToActiveChat;
+
+window.openWhatsAppChat = openWhatsAppChatFor;
+window.renderKanbanBoard = loadKanbanBoard;

@@ -148,7 +148,13 @@ export async function ingestLead(input: IngestLeadInput) {
   let websiteId = input.websiteId;
   const dom = (input.domain || input.sourceUrl || '').toLowerCase();
   if (!websiteId) {
-    if (dom.includes('gcmnetting.com') || dom.includes('bangalore') || dom.includes('bengaluru')) {
+    if (dom.includes('nettingteam.com') || dom.includes('nettingteam')) {
+      websiteId = 'nettingteam';
+    } else if (dom.includes('zenxa.in') || dom.includes('zenxa')) {
+      websiteId = 'zenxa';
+    } else if (dom.includes('gcmsafetynets.com')) {
+      websiteId = 'gcmsafetynets-com';
+    } else if (dom.includes('gcmnetting.com') || dom.includes('bangalore') || dom.includes('bengaluru')) {
       websiteId = 'gcmnetting';
     } else if (dom.includes('gcmnettingsolutions.com') || dom.includes('chennai') || dom.includes('tambaram')) {
       websiteId = 'gcmnettingsolutions';
@@ -223,7 +229,7 @@ export async function sendLeadAutoWelcome(lead: any) {
     if (lead.pillar === 'turnkey') {
       msg += `🏏 *Turnkey Sports & Box Cricket Project Team:*\n`;
       msg += `Our technical directors are reviewing your ground dimensions to prepare your initial 3D layout & 15-line BOQ estimate.\n\n`;
-      msg += `📞 Executive Project Line: +91 99123 99227\n🌐 Website: https://gcm.enterprises`;
+      msg += `📞 Executive Project Line: +91 99123 99224\n🌐 Website: https://gcm.enterprises`;
     } else if (lead.pillar === 'supply_only') {
       msg += `📦 *Factory-Direct Netting Supply (Pan-India):*\n`;
       msg += `Our wholesale dispatch desk will connect with you with the product specifications & transport details.\n\n`;
@@ -766,7 +772,7 @@ export async function dispatchQuotationToLead(input: DispatchQuotationInput) {
 
   if (input.includeUpi !== false) {
     msg += `📲 *Instant UPI Payment:*\n`;
-    msg += `• UPI ID: *9912399224@sbi*\n`;
+    msg += `• UPI ID: *gcmenterprises@ybl*\n`;
     msg += `• PhonePe / Google Pay / Paytm: *9912399224*\n\n`;
   }
 

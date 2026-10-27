@@ -14,7 +14,7 @@ chatRouter.post('/', async (req, res) => {
     }
 
     const response = await processChatConversation({
-      websiteId: websiteId || 'netsocean',
+      websiteId: websiteId || (req.body as any).website || 'gcm-enterprises',
       sessionId,
       customerName,
       phone,
