@@ -1,10 +1,14 @@
 /**
- * Owner Approval Queue Service
+ * Owner Approval Queue Service (Enterprise 2026)
  * Guards against unauthorized discounts, credit approvals, or custom pricing.
+ * Strictly adheres to Phase 5.3:
+ * State Workflow: DRAFT -> VALIDATED -> PENDING_OWNER_APPROVAL -> APPROVED -> DOCUMENT_GENERATED -> SENT
+ * If rejected: PENDING_OWNER_APPROVAL -> REJECTED
  */
 
 import { db } from '../db/database.js';
 import crypto from 'node:crypto';
+import { updateLeadStage, logLeadActivity } from './lead-service.js';
 
 export interface CreateApprovalInput {
   leadId: string;
@@ -29,25 +33,69 @@ export function createOwnerApprovalRequest(input: CreateApprovalInput) {
     input.proposedRate || null
   );
 
+  logLeadActivity(
+    input.leadId,
+    'APPROVAL_REQUESTED',
+    `Commercial approval requested: ${input.reason}`,
+    'AI Sales Brain'
+  );
+
   return db.prepare('SELECT * FROM owner_approvals WHERE id = ?').get(id) as any;
 }
 
-export function decideOwnerApproval(approvalId: string, decision: 'APPROVED' | 'REJECTED', comments?: string) {
+export function decideOwnerApproval(
+  approvalId: string,
+  decision: 'APPROVED' | 'REJECTED',
+  comments?: string,
+  approverUser = 'Owner / Managing Director'
+) {
   const approval = db.prepare('SELECT * FROM owner_approvals WHERE id = ?').get(approvalId) as any;
   if (!approval) {
     throw new Error(`Approval request not found: ${approvalId}`);
   }
 
+  // Update owner_approvals record
   db.prepare(`
     UPDATE owner_approvals 
     SET status = ?, owner_comments = ?, decided_at = CURRENT_TIMESTAMP 
     WHERE id = ?
   `).run(decision, comments || null, approvalId);
 
-  // If approved and attached to a quotation, update quotation status
+  // If attached to a quotation, update quotation status strictly according to state machine
   if (approval.quotation_id) {
-    const newStatus = decision === 'APPROVED' ? 'ACCEPTED' : 'DRAFT';
-    db.prepare('UPDATE quotations SET status = ? WHERE id = ?').run(newStatus, approval.quotation_id);
+    const newQuotationStatus = decision === 'APPROVED' ? 'APPROVED' : 'REJECTED';
+    db.prepare(`
+      UPDATE quotations 
+      SET status = ? 
+      WHERE id = ?
+    `).run(newQuotationStatus, approval.quotation_id);
+
+    // Update lead stage & activity
+    if (decision === 'APPROVED') {
+      updateLeadStage(
+        approval.lead_id,
+        'QUOTATION_APPROVED',
+        `Quotation approved by ${approverUser}. Comments: ${comments || 'No comments'}`
+      );
+      logLeadActivity(
+        approval.lead_id,
+        'APPROVAL_GRANTED',
+        `Commercial approval GRANTED by ${approverUser}. Comments: ${comments || 'Approved'}`,
+        approverUser
+      );
+    } else {
+      updateLeadStage(
+        approval.lead_id,
+        'QUOTATION_REJECTED',
+        `Quotation rejected by ${approverUser}. Reason: ${comments || 'Commercial terms declined'}`
+      );
+      logLeadActivity(
+        approval.lead_id,
+        'APPROVAL_REJECTED',
+        `Commercial approval REJECTED by ${approverUser}. Reason: ${comments || 'Commercial terms declined'}`,
+        approverUser
+      );
+    }
   }
 
   return db.prepare('SELECT * FROM owner_approvals WHERE id = ?').get(approvalId);

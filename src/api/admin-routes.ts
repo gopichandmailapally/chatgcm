@@ -643,6 +643,56 @@ adminRouter.get('/pricing/history', (req, res) => {
   }
 });
 
+adminRouter.post('/pricing/rollback', (req, res) => {
+  try {
+    const { auditId, revertedBy = 'ADMIN_ROLLBACK' } = req.body;
+    if (!auditId) {
+      return res.status(400).json({ success: false, error: 'auditId is required for rollback.' });
+    }
+
+    const historyRecord = db.prepare('SELECT * FROM price_history WHERE id = ?').get(auditId) as any;
+    if (!historyRecord) {
+      return res.status(404).json({ success: false, error: `Audit record not found: ${auditId}` });
+    }
+
+    const { product_id, field_changed, old_value, new_value, tenant_id } = historyRecord;
+    if (old_value === undefined || old_value === null) {
+      return res.status(400).json({ success: false, error: 'Historical record has no old value to restore.' });
+    }
+
+    // Restore on products table
+    if (['price', 'gst_pct', 'warranty_years', 'unit', 'specification', 'is_active'].includes(field_changed)) {
+      db.prepare(`UPDATE products SET ${field_changed} = ? WHERE id = ?`).run(old_value, product_id);
+    }
+
+    // Restore on pricing_rules table if price changed
+    if (field_changed === 'price') {
+      db.prepare(`UPDATE pricing_rules SET rate_per_unit = ? WHERE product_id = ? AND customer_type = 'retail'`).run(Number(old_value), product_id);
+    }
+
+    const rollbackAuditId = 'HIST-RB-' + Date.now().toString(36).toUpperCase();
+    const effDate = new Date().toISOString().split('T')[0];
+
+    db.prepare(`
+      INSERT INTO price_history (id, product_id, tenant_id, field_changed, old_value, new_value, changed_by, effective_from)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(rollbackAuditId, product_id, tenant_id || 'ALL', `${field_changed} (ROLLBACK)`, String(new_value), String(old_value), revertedBy, effDate);
+
+    logLeadActivity('SYSTEM-PRICING', 'PRICE_ROLLBACK', `Rolled back ${field_changed} of ${product_id} from ${new_value} to ${old_value}`, revertedBy);
+
+    res.json({
+      success: true,
+      message: `Rolled back ${field_changed} of ${product_id} to ${old_value}`,
+      rollbackAuditId,
+      productId: product_id,
+      restoredField: field_changed,
+      restoredValue: old_value
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 adminRouter.post('/pricing/tenant-override', (req, res) => {
   try {
     const { tenantId, productId, overrideRate, gstPct, notes, effectiveFrom } = req.body;

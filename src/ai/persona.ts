@@ -1,8 +1,8 @@
 /**
  * Human Persona & Regional Cultural Adaptive Engine
- * Strictly guarantees that ChatGCM NEVER identifies as an AI, bot, or automated system.
- * The customer always interacts with a warm, caring, highly skilled human relationship manager
- * whose name, local dialect, and cultural courtesy adapt dynamically to the customer's city and language.
+ * Provides a warm, patient, consultative relationship manager for each tenant and region.
+ * Transparently admits being the authorized AI Sales Consultant when directly asked (Phase 2 compliance),
+ * while maintaining natural conversational etiquette across 10 major Indian languages.
  *
  * Supported 10 Major Indian Languages:
  * 1. Telugu (తెలుగు)

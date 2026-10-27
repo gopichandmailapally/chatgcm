@@ -489,29 +489,7 @@ Here are our verified company bank credentials for booking your order with ${bra
     }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SCENARIO 3: TURNKEY BOX CRICKET GROUND INQUIRY WITH DIMENSIONS
-  // ═══════════════════════════════════════════════════════════════════════════
-  } else if (isTurnkeyIntent && (dimMatch || sftMatch)) {
-    let length = 100;
-    let width = 50;
-    let height = 25;
-
-    if (dimMatch) {
-      length = parseFloat(dimMatch[1]);
-      width = parseFloat(dimMatch[2]);
-      if (dimMatch[3]) height = parseFloat(dimMatch[3]);
-    }
-
-    const { calculateTurnkeyBoxCricket } = await import('../calculators/turnkey-box-calculator.js');
-    const turnkey = calculateTurnkeyBoxCricket({ lengthFt: length, widthFt: width, heightFt: height });
-
-    cardType = 'turnkey_boq';
-    cardData = turnkey;
-
-    replyText = `For a turnkey box cricket ground of ${length}x${width}x${height} ft (${turnkey.dimensions.groundAreaSft.toLocaleString('en-IN')} SFT), the complete turnkey project estimate is ₹${turnkey.grandTotal.toLocaleString('en-IN')} including pitch, steel structure, FIFA-grade turf, 2.5mm heavy-duty nets, and stadium floodlights. Would you like to schedule an engineer site visit?`;
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // SCENARIO 4: CONSULTATIVE SALES ENGINE DELEGATION
+  // SCENARIO 3: CONSULTATIVE SALES ENGINE DELEGATION (Unified Single State Machine)
   // ═══════════════════════════════════════════════════════════════════════════
   } else {
     const consultantResult = handleSalesConversation({
@@ -524,7 +502,7 @@ Here are our verified company bank credentials for booking your order with ${bra
       history
     });
     replyText = consultantResult.replyText;
-    cardType = consultantResult.cardType;
+    cardType = consultantResult.cardType as any;
     cardData = consultantResult.cardData;
   }
 

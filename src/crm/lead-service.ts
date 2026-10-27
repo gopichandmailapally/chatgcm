@@ -705,6 +705,12 @@ export async function dispatchQuotationToLead(input: DispatchQuotationInput) {
   const lead = db.prepare('SELECT l.*, w.brand_name FROM leads l LEFT JOIN websites w ON l.website_id = w.id WHERE l.id = ?').get(input.leadId) as any;
   if (!lead) throw new Error(`Lead not found: ${input.leadId}`);
 
+  // Prevent sending an unapproved official quotation (Phase 5.3 Strict Gate)
+  const unapprovedQuote = db.prepare("SELECT * FROM quotations WHERE lead_id = ? AND status IN ('PENDING_APPROVAL', 'REJECTED', 'DRAFT')").get(lead.id) as any;
+  if (unapprovedQuote) {
+    throw new Error(`Quotation ${unapprovedQuote.quote_number} is pending Owner Approval (status: '${unapprovedQuote.status}') and cannot be dispatched without owner approval.`);
+  }
+
   const grandTotal = Number(input.grandTotal || 0);
   if (grandTotal <= 0) {
     throw new Error('Valid quotation total amount is required.');

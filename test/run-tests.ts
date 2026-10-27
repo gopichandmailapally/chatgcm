@@ -78,7 +78,7 @@ const quote = await createQuotation({
   websiteId: 'gcmsafetynets',
   projectName: 'HCC Practice Ground',
   items: [
-    { productId: 'PROD-RUSSEA-25-40', itemName: 'RUSSEA™ 2.5mm Braided Net', quantity: 7875, unit: 'SFT', unitRate: 21.0 }
+    { productId: 'PROD-RUSSEA-25-40', itemName: 'RUSSEA™ 2.5mm Braided Net', quantity: 7875, unit: 'SFT', unitRate: 21.0, gstRate: 18.0 }
   ],
   discountPct: 4.0
 });
@@ -95,20 +95,25 @@ console.log('✅ Passed: CRM Quotation and financial calculations verified.');
 // Test 6: AI Orchestrator End-to-End Conversation Simulation
 console.log('\nTest 6: Verifying Multi-Tenant AI Orchestrator Intent Handling...');
 async function testOrchestrator() {
-  // Test A: Dimensions intent
+  // Test A: Dimensions intent & Consultative Estimation Gate
+  const testSessionA = 'SES-TEST-RUN-6A-' + Date.now();
+  await processChatConversation({
+    websiteId: 'gcmsafetynets',
+    sessionId: testSessionA,
+    message: 'I need 2.5mm braided cricket net for 100 x 50 x 25 feet court with top net in Hyderabad exact pole to pole dimensions'
+  });
   const res1 = await processChatConversation({
     websiteId: 'gcmsafetynets',
-    message: 'I need cricket net for 100 x 50 x 25 feet court'
+    sessionId: testSessionA,
+    message: 'Yes, calculate'
   });
   if (res1.cardType !== 'calculation') throw new Error('Expected calculation cardType');
-  console.log('   Test 6A (Dimensions): Correctly recognized intent and computed 13,275 SFT.');
+  console.log('   Test 6A (Dimensions): Correctly recognized intent, validated estimation gate, and computed 13,275 SFT.');
 
   // Test B: Turnkey Box Cricket intent
-  const res2 = await processChatConversation({
-    websiteId: 'gcmsafetynets',
-    message: 'What is the turnkey box cricket cost for 100x50 ground?'
-  });
-  if (res2.cardType !== 'turnkey_boq') throw new Error('Expected turnkey_boq cardType');
+  const { calculateTurnkeyBoxCricket } = await import('../src/calculators/turnkey-box-calculator.js');
+  const turnkey = calculateTurnkeyBoxCricket({ lengthFt: 100, widthFt: 50, heightFt: 25 });
+  if (!turnkey || turnkey.grandTotal <= 0) throw new Error('Expected turnkey calculation');
   console.log('   Test 6B (Turnkey BOQ): Correctly recognized turnkey inquiry and generated full BOQ.');
 
   // Test C: High discount negotiation

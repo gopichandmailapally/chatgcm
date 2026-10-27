@@ -60,16 +60,20 @@ export interface BridgeEstimationResult {
 }
 
 const BRIDGE_URL = process.env.GCM_BRIDGE_URL || 'https://gcm.enterprises/admin/api/ai-doc-bridge.php';
-const BRIDGE_TOKEN = process.env.GCM_BRIDGE_TOKEN || 'GCM_AI_DOC_BRIDGE_SECRET_2026';
 
 export async function generateOfficialEstimation(payload: GenerateEstimationPayload): Promise<BridgeEstimationResult> {
+  const bridgeToken = process.env.GCM_BRIDGE_TOKEN;
+  if (!bridgeToken || bridgeToken.trim() === '') {
+    throw new Error('[Security Guardrail] GCM Bridge authentication token (GCM_BRIDGE_TOKEN) is not configured in environment. Failing closed to prevent unauthorized document generation.');
+  }
+
   try {
     const response = await fetch(BRIDGE_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${BRIDGE_TOKEN}`,
-        'X-Bridge-Token': BRIDGE_TOKEN
+        'Authorization': `Bearer ${bridgeToken}`,
+        'X-Bridge-Token': bridgeToken
       },
       body: JSON.stringify(payload)
     });

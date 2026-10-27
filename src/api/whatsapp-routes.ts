@@ -203,16 +203,16 @@ whatsappRouter.post('/webhook', (req, res) => {
       // ── Auto-synchronize CRM Lead State based on incoming customer WhatsApp message ──
       const lowerText = incomingText.toLowerCase();
       let autoStage: string | null = null;
-      if (lowerText.includes('paid') || lowerText.includes('transferred') || lowerText.includes('advance sent') || lowerText.includes('screenshot') || lowerText.includes('utr') || lowerText.includes('confirm order') || lowerText.includes('order confirm')) {
-        autoStage = 'WON';
-      } else if (lowerText.includes('cancel') || lowerText.includes('not interested') || lowerText.includes('too expensive') || lowerText.includes('no need') || lowerText.includes('dont want') || lowerText.includes('stop')) {
+      if (lowerText.includes('cancel') || lowerText.includes('not interested') || lowerText.includes('no need') || lowerText.includes('dont want') || lowerText.includes('stop')) {
         autoStage = 'LOST';
-      } else if (lowerText.includes('visit') || lowerText.includes('survey') || lowerText.includes('measurement') || lowerText.includes('call me') || lowerText.includes('address') || lowerText.includes('come tomorrow') || lowerText.includes('reach me') || lowerText.includes('maps.google') || lowerText.includes('goo.gl') || lowerText.includes('slide')) {
+      } else if (lowerText.includes('visit') || lowerText.includes('survey') || lowerText.includes('measurement') || lowerText.includes('call me') || lowerText.includes('address') || lowerText.includes('come tomorrow') || lowerText.includes('reach me') || lowerText.includes('maps.google') || lowerText.includes('goo.gl')) {
         autoStage = 'CONTACTED';
-      } else if (lowerText.includes('quote') || lowerText.includes('quotation') || lowerText.includes('estimate') || lowerText.includes('pricing') || lowerText.includes('cost') || lowerText.includes('rate')) {
-        autoStage = 'QUOTE_SENT';
       } else {
-        autoStage = 'NEW_LEAD';
+        // Never jump straight to QUOTE_SENT or WON via keyword matching alone
+        const existingLead = db.prepare('SELECT id, pipeline_stage FROM leads WHERE phone LIKE ? LIMIT 1').get(`%${cleanPhone}%`) as any;
+        if (!existingLead || existingLead.pipeline_stage === 'NEW' || !existingLead.pipeline_stage) {
+          autoStage = 'CONTACTED';
+        }
       }
 
       if (autoStage) {
@@ -280,11 +280,15 @@ whatsappRouter.post('/webhook', (req, res) => {
       let resolvedWebsiteId = 'gcmsafetynets';
 
       // Prioritize active product intent from customer's latest incoming message
-      if (lower.includes('invisible grill') || lower.includes('ss grill') || lower.includes('wire grill')) {
+      if (lower.includes('nettingteam') || senderPhone.includes('9912399334')) {
+        resolvedWebsiteId = 'nettingteam';
+      } else if (lower.includes('zenxa') || lower.includes('architectural')) {
+        resolvedWebsiteId = 'zenxa';
+      } else if (lower.includes('invisible grill') || lower.includes('ss grill') || lower.includes('wire grill')) {
         resolvedWebsiteId = 'gcminvisiblegrills';
       } else if (lower.includes('turnkey') || lower.includes('box cricket') || lower.includes('ground construction') || lower.includes('court construction') || lower.includes('cage fabrication')) {
         resolvedWebsiteId = 'gcm-enterprises';
-      } else if (lower.includes('wholesale') || lower.includes('full bag') || lower.includes('half bag') || lower.includes('bundles') || lower.includes('material only') || lower.includes('supply only') || lower.includes('without installation')) {
+      } else if (lower.includes('wholesale') || lower.includes('full bag') || lower.includes('half bag') || lower.includes('bundles') || lower.includes('material only') || lower.includes('supply only') || lower.includes('without installation') || lower.includes('russea')) {
         resolvedWebsiteId = 'netsocean';
       } else if (lower.includes('pigeon') || lower.includes('balcony') || lower.includes('safety net') || lower.includes('bird net') || lower.includes('cat net') || lower.includes('monkey net') || lower.includes('cloth hanger') || lower.includes('hanger') || lower.includes('drying') || lower.includes('grass') || lower.includes('turf') || lower.includes('artificial')) {
         resolvedWebsiteId = 'gcmsafetynets';

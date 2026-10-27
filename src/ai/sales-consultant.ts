@@ -1,26 +1,28 @@
 /**
- * Chat GCM — Human Sales Consultant & Dialog Engine (2026 Enterprise Edition)
- * Strictly adheres to Chat GCM Critical AI Sales Conversation & Estimation Fix:
- * 1. Introduction once per conversation (persistent state)
- * 2. Requirement-First: Understand -> Collect -> Clarify -> Recommend -> Confirm -> Calculate -> Approve -> Quote
- * 3. Never quote prematurely
- * 4. 1-2 short natural sentences, one question at a time
- * 5. Clean product context locking & switching (with requirement isolation)
- * 6. Supply-only roll calculation for grass & turf (540 SFT/roll, CEILING, discounts per roll, 5% GST)
- * 7. Cricket net mandatory pole-to-pole confirmation & material separation (45mm mesh preferred economical)
- * 8. Balcony nets: strictly genuine RUSSEA™ brand, 100 SFT boundary correction, zero Garware/hooks
- * 9. Invisible Grills: deterministic schedule (<60 SFT = ₹10k fixed, 60-100 ₹160, +₹30 outside Hyd)
- * 10. Cloth Hangers: deterministic 4-8ft ceiling/wall calculation + ₹500 outside Hyd
- * 11. Multiline professional estimate formatting for WhatsApp & Web Chat cards
- * 12. Strict quotation gate & physical visit rules (no hardcoded ₹300 fee)
+ * Chat GCM — Human-Like Sales Consultant & Dialog Engine (Enterprise 2026 Edition)
+ * Strictly adheres to Phase 2, Phase 3, Phase 4, Phase 6, Phase 7 & Phase 8:
+ * 1. Single source of truth & centralized state machine (15 canonical states)
+ * 2. Absolute Estimation Gate: No calculation without complete parameters & explicit confirmation
+ * 3. Zero assumptions: Never assume wire diameter, cloth hanger size/qty, ground height, top net, or Hyderabad location
+ * 4. Introduction only ONCE per conversation
+ * 5. One relevant question at a time, extract multiple parameters if provided
+ * 6. Product education before recommendation
+ * 7. Truthful AI identity disclosure when asked
+ * 8. Warranty accuracy (Braided net: 8-yr life / 5-yr warranty; never blanket 8-yr warranty)
+ * 9. Physical site visit handling without invented fees
+ * 10. Distinct outputs: Requirement Summary vs Preliminary Estimate vs Official Quote
  */
 
-import { 
-  ConversationState, 
-  ProductCategory, 
-  getConversationState, 
-  saveConversationState, 
-  switchProductCategory 
+import {
+  ConversationState,
+  ProductCategory,
+  ConversationStage,
+  getConversationState,
+  saveConversationState,
+  switchProductCategory,
+  checkEstimationEligibility,
+  isProductComparisonQuestion,
+  canTransition
 } from "./conversation-state.js";
 
 import {
@@ -32,13 +34,13 @@ import {
   calculateInvisibleGrills,
   calculateClothHanger,
   ROLL_SFT_STANDARD,
-  LANDSCAPE_GRASS_CATALOG,
   SPORTS_TURF_CATALOG,
   type InstalledNetQualityId
 } from "../pricing/universal-pricing-engine.js";
 
 import { calculateCricketNetting } from "../calculators/cricket-net-calculator.js";
 import { calculateTurnkeyBoxCricket } from "../calculators/turnkey-box-calculator.js";
+import { CLOTH_HANGER_BASE_PRICES, ClothHangerSize, ClothHangerMounting } from "../calculators/cloth-hanger-calculator.js";
 
 export interface SalesConsultantInput {
   sessionId: string;
@@ -58,24 +60,24 @@ export interface SalesConsultantOutput {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function detectLanguage(text: string): "telugu" | "hindi" | "english" {
-  if (/[\u0C00-\u0C7F]/.test(text) || /\b(namaskaram|enti|cheppandi|kavali|thaggandi|vastara|chustara|rate|dharalu|meeru)\b/i.test(text)) {
+export function detectLanguage(text: string): "telugu" | "hindi" | "english" {
+  if (/[\u0C00-\u0C7F]/.test(text) || /\b(namaskaram|enti|cheppandi|kavali|thaggandi|vastara|chustara|rate|dharalu|meeru|avunu|ledu|sare)\b/i.test(text)) {
     return "telugu";
   }
-  if (/[\u0900-\u097F]/.test(text) || /\b(namaste|kitna|chahiye|batao|karo|bhejo|hoga|hai|aap)\b/i.test(text)) {
+  if (/[\u0900-\u097F]/.test(text) || /\b(namaste|kitna|chahiye|batao|karo|bhejo|hoga|hai|aap|theek|sahi|kya)\b/i.test(text)) {
     return "hindi";
   }
   return "english";
 }
 
-function normalizeText(text: string): string {
+export function normalizeText(text: string): string {
   return text
     .replace(/[\u00D7\u2715\u2716\u2A2F\u2217]/g, " x ")
     .replace(/(\d+)\s*(?:ft|feet|foot|'|mtr|m|")?\s*(?:x|\*|by)\s*(\d+)\s*(?:ft|feet|foot|'|mtr|m|")?/gi, "$1 x $2")
     .replace(/(\d+)\s*(?:ft|feet|foot|'|mtr|m|")?\s*(?:x|\*|by)\s*(\d+)\s*(?:ft|feet|foot|'|mtr|m|")?\s*(?:x|\*|by)\s*(\d+)\s*(?:ft|feet|foot|'|mtr|m|")?/gi, "$1 x $2 x $3");
 }
 
-function extractDimensions(rawText: string): { length?: number; width?: number; height?: number; areaSft?: number } {
+export function extractDimensions(rawText: string): { length?: number; width?: number; height?: number; areaSft?: number } {
   const text = normalizeText(rawText);
 
   // 3D match: e.g. "100 x 50 x 25"
@@ -92,16 +94,22 @@ function extractDimensions(rawText: string): { length?: number; width?: number; 
     };
   }
 
-  // 2D match: e.g. "18 x 9"
+  // 2D match: e.g. "18 x 9" or "100 by 60"
   const dim2D = text.match(/(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|'|mtr|m|")?\s*(?:x|\*|by)\s*(\d+(?:\.\d+)?)/i);
   if (dim2D) {
     const l = parseFloat(dim2D[1]);
     const w = parseFloat(dim2D[2]);
-    return {
+    const res: { length: number; width: number; height?: number; areaSft: number } = {
       length: l,
       width: w,
       areaSft: Math.round(l * w)
     };
+    // Also check for separate height indicator (e.g. "20 feet high" or "height 20")
+    const heightMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|'|mtr|m)?\s*(?:high|height)|\bheight\s*(?:is|of)?\s*(\d+(?:\.\d+)?)/i);
+    if (heightMatch) {
+      res.height = parseFloat(heightMatch[1] || heightMatch[2]);
+    }
+    return res;
   }
 
   // SFT match: e.g. "16000sft", "2000 sft"
@@ -114,7 +122,7 @@ function extractDimensions(rawText: string): { length?: number; width?: number; 
   return {};
 }
 
-function extractFloorNumber(text: string): string | null {
+export function extractFloorNumber(text: string): string | null {
   const match = text.match(/\b(\d+)\s*(?:st|nd|rd|th)?\s*floor|\bfloor\s*(\d+)|\b(\d+)floor\b/i);
   if (match) {
     return match[1] || match[2] || match[3];
@@ -122,7 +130,7 @@ function extractFloorNumber(text: string): string | null {
   return null;
 }
 
-function extractRolls(text: string): number | undefined {
+export function extractRolls(text: string): number | undefined {
   const rollsMatch = text.match(/(\d+)\s*(?:full\s*)?rolls?\b/i);
   if (rollsMatch) {
     return parseInt(rollsMatch[1], 10);
@@ -130,101 +138,111 @@ function extractRolls(text: string): number | undefined {
   return undefined;
 }
 
-function detectProductCategory(text: string): ProductCategory | null {
+export function detectProductCategory(text: string): ProductCategory | null {
   const lower = text.toLowerCase();
 
-  if (lower.includes("cricket") || lower.includes("batting net") || lower.includes("bowling net") || lower.includes("pitch net") || lower.includes("cage net") || lower.includes("braided net")) {
+  if (/(?:cricket|batting\s*nets?|bowling\s*nets?|pitch\s*nets?|cage\s*nets?|braided\s*nets?|sports\s*nets?|ground\s*nets?|box\s*cricket)/i.test(lower)) {
     return "cricket_net";
   }
 
-  if (lower.includes("artificial grass") || lower.includes("landscape grass") || lower.includes("balcony grass") || lower.includes("garden grass") || (lower.includes("grass") && !lower.includes("turf accessories"))) {
+  if (/(?:artificial\s*grass|landscape\s*grass|balcony\s*grass|garden\s*grass|lawn\s*grass)/i.test(lower) || (lower.includes("grass") && !lower.includes("turf accessories") && !lower.includes("sports turf"))) {
     return "landscape_grass";
   }
 
-  if (lower.includes("sports turf") || lower.includes("football turf") || lower.includes("turf") || lower.includes("50mm turf") || lower.includes("multisport")) {
+  if (/(?:sports\s*turf|football\s*turf|50mm\s*turf|multisports?|futsal|turf)/i.test(lower) && !lower.includes("landscape")) {
     return "sports_turf";
   }
 
-  if (lower.includes("pigeon") || lower.includes("balcony net") || lower.includes("safety net") || lower.includes("bird net") || lower.includes("cat net") || lower.includes("monkey net") || lower.includes("పావురాల") || lower.includes("కబూతర్") || lower.includes("कबूतर")) {
+  if (/(?:pigeon|balcon(?:y|ies)|safety\s*nets?|bird\s*nets?|cat\s*nets?|monkey\s*nets?|duct\s*nets?|పావురాల|కబూతర్|कबूतर)/i.test(lower) && !/(?:cricket|turf|grass|hanger)/i.test(lower)) {
     return "pigeon_safety_net";
   }
 
-  if (lower.includes("invisible grill") || lower.includes("ss grill") || lower.includes("stainless steel grill") || lower.includes("గ్రిల్స్") || lower.includes("ग्रिल")) {
+  if (/(?:invisible\s*grills?|ss\s*grills?|stainless\s*steel\s*grills?|గ్రిల్స్?|ग्रिल)/i.test(lower)) {
     return "invisible_grill";
   }
 
-  if (lower.includes("cloth") || lower.includes("hanger") || lower.includes("drying") || lower.includes("pulley") || lower.includes("హ్యాంగర్") || lower.includes("हैंगर")) {
+  if (/(?:cloth\s*hangers?|drying\s*hangers?|pulley\s*hangers?|hangers?|హ్యాంగర్|हैंगर)/i.test(lower)) {
     return "cloth_hanger";
   }
 
-  if (lower.includes("silica sand") || lower.includes("rubber granule") || lower.includes("speb 7") || lower.includes("seaming tape")) {
+  if (/(?:silica\s*sand|rubber\s*granules?|speb\s*7|seaming\s*tape)/i.test(lower)) {
     return "turf_accessories";
   }
 
-  if (lower.includes("turnkey") || lower.includes("box cricket")) {
+  if (/(?:turnkey|court\s*construction)/i.test(lower)) {
     return "turnkey_project";
   }
 
   return null;
 }
 
-// ── Product Education / Customer Question Interceptor ────────────────────────
+// ── Product Education & Comparison Interceptor ──────────────────────────────
 
-function handleProductInquiry(text: string, category: ProductCategory | null, state: ConversationState): string | null {
+function handleProductEducationAndComparison(text: string, activeCategory: ProductCategory | null): string | null {
   const lower = text.toLowerCase();
 
-  // 1. Difference between thickness / 2mm vs 2.5mm
-  if (/(difference|diff|compare|2mm\s*vs\s*2\.5mm|2\.5mm\s*vs\s*2mm|which\s*is\s*better|better\s*quality)/i.test(lower)) {
-    if (category === "cricket_net" || lower.includes("cricket")) {
-      return "For cricket nets, 2mm braided net (45mm mesh) is lightweight and very economical for general practice, while 2.5mm braided net is commercial heavy-duty with higher breaking strength, ideal for ground side walls and tournament cages. For overhead roof netting, 1.5mm twisted net is the recommended lightweight option.";
-    }
-    return "Our 2.0mm genuine RUSSEA™ braided net (₹20/SFT) is designed for pigeon and child safety with a 5-year replacement warranty. Our 2.5mm heavy-duty braided net (₹21/SFT) has higher tensile strength, making it ideal if you need protection against monkeys or active pets, backed by an 8-year warranty.";
+  // Comparison between Invisible Grills and Safety Nets
+  if (isProductComparisonQuestion(text) && (lower.includes("invisible") || lower.includes("grill")) && (lower.includes("net") || lower.includes("safety"))) {
+    return "Both are excellent balcony safety solutions, sir:\n" +
+      "• Balcony Safety Nets (RUSSEA™ HDPE): Economical (₹18–₹23/SFT installed), lightweight, allows full breeze, 5-year replacement warranty.\n" +
+      "• Invisible Grills (AISI 316 Marine SS): Ultra-modern sleek appearance, zero view obstruction, high tensile steel cables (450+ kg breaking load), 10-year materials warranty.\n\n" +
+      "Which option would you prefer for your balcony?";
   }
 
-  // 2. Types of nets / Options / Varieties
-  if (/(types?\s*of|variet|options?|what\s*(?:are\s*the\s*)?types|types\?+|which\s*(?:net|grass|turf|grill)\s*(?:is|to)|kinds?\s*of|available\s*types)/i.test(lower)) {
-    if (category === "pigeon_safety_net" || category === null || lower.includes("safety") || lower.includes("balcony") || lower.includes("net")) {
-      const dimMention = state.confirmed_dimensions && state.confirmed_dimensions.areaSft ? (" for your " + state.confirmed_dimensions.areaSft + " SFT balcony") : "";
-      return "For balcony safety, we provide 3 main options, sir:\n1. 2.0mm genuine RUSSEA™ HDPE Net (economical & strong, 5-year warranty)\n2. 2.5mm Braided Heavy-Duty Net (extra strong for monkeys & pets, 8-year warranty)\n3. AISI 316 Stainless Steel Invisible Grills (ultra-modern with clear view, 10-year warranty)\n\nWhich type would you prefer" + dimMention + "?";
+  // Thickness comparison: 2.0mm vs 2.5mm
+  if (/(difference|compare|2mm\s*vs\s*2\.5mm|2\.5mm\s*vs\s*2mm|which\s*is\s*better|better\s*quality)/i.test(lower)) {
+    if (activeCategory === "cricket_net" || lower.includes("cricket")) {
+      return "For cricket nets:\n" +
+        "• 2.0mm Braided (45mm mesh): Lightweight, economical, ideal for school & community practice.\n" +
+        "• 2.5mm Braided (45mm mesh preferred economical, 40mm denser): Professional commercial grade with superior impact resistance for side walls.\n" +
+        "• 1.5mm Twisted: Lightweight overhead top net for large grounds.";
     }
-    if (category === "cricket_net" || lower.includes("cricket")) {
-      return "For cricket nets, we supply:\n• 2mm Braided Net (45mm or 40mm mesh) — lightweight & economical\n• 2.5mm Braided Net (45mm preferred economical, or 40mm mesh) — professional heavy-duty for ground sides\n• 1.5mm Twisted Net (40mm mesh) — lightweight overhead top net for large grounds\n\nWould you prefer 2mm or 2.5mm for your setup?";
-    }
-    if (category === "landscape_grass" || lower.includes("grass")) {
-      return "We supply premium landscape artificial grass in 4 thicknesses:\n• 25mm: ₹24/SFT (economical for balconies & indoor decor)\n• 35mm: ₹28/SFT (popular plush feel for balconies & gardens)\n• 40mm: ₹32/SFT (dense luxury lawn feel)\n• 50mm: ₹36/SFT (ultra-dense super soft)\nAll supplied in 540 SFT full rolls with volume discounts from 2+ rolls.";
-    }
-    if (category === "invisible_grill" || lower.includes("grill")) {
-      return "Our invisible grills use genuine AISI 316 Marine Grade stainless steel cables with DuPont nylon coating (450+ kg tensile load). We offer 2-inch and 3-inch gap spacing options with high-grade aluminum track fixings and a 10-year rust guarantee.";
-    }
+    return "For balcony safety nets:\n" +
+      "• 2.0mm Braided Net (₹20/SFT): Designed for pigeon protection and child safety with a 5-year replacement warranty.\n" +
+      "• 2.5mm Braided Net (₹21/SFT): Heavy-duty net with higher tensile strength, ideal for monkey protection or active pets (8-year expected life, 5-year warranty).";
   }
 
-  // 3. Monkey / Pets / Bird safety inquiry
-  if (/(monkey|monkeys|cat|cats|dog|dogs|pet|pets|bite|chew|torn|tear)/i.test(lower) || (/(block|stop|prevent|keep\s*away|protection|safe\s*from|trouble|menace|effective)/i.test(lower) && /(pigeon|bird)/i.test(lower))) {
-    if (lower.includes("monkey") || lower.includes("cat") || lower.includes("pet")) {
-      return "For protection against monkeys and pets, our 2.5mm heavy-duty braided net or AISI 316 stainless steel invisible grills are the best choice, sir. Standard 2.0mm nets are for pigeons and child safety, whereas 2.5mm braided nets and SS grills cannot be chewed or torn by monkeys or pets. Would you like a quote for the 2.5mm heavy-duty option?";
+  // Types of nets / options
+  if (/(types?\s*of|options?|what\s*(?:are\s*the\s*)?types|available\s*types)/i.test(lower)) {
+    if (activeCategory === "cricket_net" || lower.includes("cricket")) {
+      return "For cricket nets, we supply:\n" +
+        "• 2mm Braided Net (45mm or 40mm mesh) — lightweight & economical\n" +
+        "• 2.5mm Braided Net (45mm preferred economical, or 40mm mesh) — professional heavy-duty for ground sides\n" +
+        "• 1.5mm Twisted Net (40mm mesh) — lightweight overhead top netting for full enclosures.";
     }
-    return "Our genuine RUSSEA™ 2.0mm 40mm/45mm mesh completely blocks pigeons, sparrows, and other birds while ensuring 100% natural breeze and sunlight into your balcony.";
+    if (activeCategory === "landscape_grass" || lower.includes("grass")) {
+      return "We supply premium landscape artificial grass in 4 pile heights:\n" +
+        "• 25mm: ₹24/SFT (economical for balconies & indoor decor)\n" +
+        "• 35mm: ₹28/SFT (popular plush feel for residential gardens & balconies)\n" +
+        "• 40mm: ₹32/SFT (dense luxury lawn feel)\n" +
+        "• 50mm: ₹36/SFT (ultra-dense super soft premium)\n" +
+        "All supplied in 540 SFT full rolls.";
+    }
+    if (activeCategory === "invisible_grill" || lower.includes("grill")) {
+      return "Our invisible grills use genuine AISI 316 Marine Grade stainless steel cables with transparent nylon coating. We offer 2-inch and 3-inch gap spacing with rigid structural aluminum track fixings.";
+    }
+    if (activeCategory === "cloth_hanger" || lower.includes("hanger")) {
+      return "We manufacture SS304 6-rod cloth drying hangers in two mounting styles:\n" +
+        "• Ceiling-Mounted (individual pulley-operated stainless steel rods)\n" +
+        "• Wall-Mounted (foldable stainless steel frame)\n" +
+        "Available in 4ft, 5ft, 6ft, 7ft, and 8ft lengths.";
+    }
+    return "For balcony safety, we provide genuine RUSSEA™ HDPE safety nets (2.0mm & 2.5mm braided) and AISI 316 Stainless Steel Invisible Grills. Which product would you like to explore?";
   }
 
-  // 4. Warranty / Life / Durability
-  if (/(warranty|guarantee|durability|life\s*span|how\s*many\s*years|how\s*long|sun|rain|weather)/i.test(lower)) {
-    return "All our nets are 100% virgin HDPE, UV-stabilized against harsh sun and rain. We provide:\n• 5-year written replacement warranty on 2.0mm standard nets\n• 8-year warranty on 2.5mm heavy-duty braided nets\n• 10-year rust guarantee on AISI 316 invisible grills.\nIf there is any sun degradation, we replace it free of charge.";
-  }
-
-  // 5. Colors / Visibility / Airflow / Lighting
-  if (/(color|colours?|transparent|translucent|white|green|sunlight|breeze|airflow|block\s*light|view)/i.test(lower)) {
-    return "Balcony safety nets are available in translucent white and green. They allow 100% natural light and full breeze into your balcony without blocking your view. If you want a completely unobstructed modern look, our transparent 316 stainless steel invisible grills are also an excellent option. Which do you prefer?";
-  }
-
-  // 6. Installation method / Process / Tile damage
-  if (/(how\s*(?:do\s*you\s*)?install|installation\s*process|how\s*is\s*it\s*fixed|drill|drilling|tile\s*damage|damage)/i.test(lower)) {
-    return "For safety nets, our certified technicians install stainless steel fasteners along the balcony border, stretch the net drum-tight using border ropes, and secure it seamlessly without sagging or damaging your balcony tiles. Complete installation is handled by our team in just 2 to 3 hours.";
+  // Warranty inquiry (Strictly adheres to Phase 4.9 approved terms)
+  if (/(warranty|guarantee|durability|life\s*span|how\s*many\s*years|how\s*long)/i.test(lower)) {
+    return "Here are our approved warranty terms:\n" +
+      "• Braided Safety Nets: Expected service life of 8 years; written warranty of 5 years for eligible damage repair or replacement.\n" +
+      "• 1.5mm Twisted Nets: Expected service life of 5 years; written warranty of 3 years.\n" +
+      "• Invisible Grills: 10-year materials warranty against rust, plus 3-year free service within our approved service area.\n" +
+      "• Cloth Hangers: 2-year product warranty and covered service (ropes excluded).";
   }
 
   return null;
 }
 
-// ── Dialog Execution ─────────────────────────────────────────────────────────
+// ── Main Conversational Controller ──────────────────────────────────────────
 
 export function handleSalesConversation(input: SalesConsultantInput): SalesConsultantOutput {
   const { sessionId, userText, websiteId } = input;
@@ -232,137 +250,578 @@ export function handleSalesConversation(input: SalesConsultantInput): SalesConsu
   const lang = detectLanguage(userText);
   const lower = userText.toLowerCase().trim();
 
-  // 1. Identity Question Check ("Who are you?", "Are you AI?")
+  // 1. Truthful AI Identity Disclosure (Phase 3.2 & Phase 14)
+  const isAskingIfAi = /(are\s*you\s*(?:an?\s*)?(?:ai|bot|robot|computer|machine)|robot\s*aa|bot\s*aa|meeru\s*ai\s*aa|kya\s*aap\s*ai\s*hai)/i.test(lower);
+  if (isAskingIfAi) {
+    const aiDisclosure = lang === "telugu"
+      ? "అవును సర్, నేను జిసిఎమ్ ఎంటర్‌ప్రైజెస్ అధికారిక AI సేల్స్ కన్సల్టెంట్‌ని. మా ప్రొడక్ట్స్, కొలతలు మరియు ఖచ్చితమైన ఎస్టిమేషన్ వివరాల్లో మీకు సహాయం చేయడానికి ఇక్కడ ఉన్నాను సర్. మీకు ఏ ప్రొడక్ట్ వివరాలు కావాలి సర్?"
+      : lang === "hindi"
+      ? "जी हाँ सर, मैं जीसीएम एंटरप्राइजेज का आधिकारिक एआई सेल्स कंसल्टेंट हूँ। मैं आपको उत्पादों, स्पेसिफिकेशन्स और सटीक कोटेशन में पूरी सहायता करूँगा। आप किस उत्पाद के बारे में जानना चाहते हैं?"
+      : "Yes, I am Venkatesh, an authorized AI sales consultant representing GCM Enterprises. I'm here to explain our product specifications, recommend the right materials, and calculate accurate estimates for your project. How can I assist you today?";
+    saveConversationState(sessionId, state);
+    return { replyText: aiDisclosure };
+  }
+
+  // 2. Identity Question Check ("Who are you?", "Your name?")
   const isAskingIdentity = /(who\s*are\s*you|which\s*company|your\s*name|who\s*is\s*this|meeru\s*evaru|aap\s*kaun\s*hai)/i.test(lower);
   if (isAskingIdentity) {
     const idReply = lang === "telugu"
-      ? "నేను జిసిఎమ్ ఎంటర్‌ప్రైజెస్ నుండి వెంకటేష్ ని సర్, సేల్స్ కన్సల్టెంట్‌ని. నేను మీకు ఎలా సహాయపడగలను?"
+      ? "నేను జిసిఎమ్ ఎంటర్‌ప్రైజెస్ నుండి వెంకటేష్ ని సర్, సీనియర్ సేల్స్ కన్సల్టెంట్‌ని. నేను మీకు ఎలా సహాయపడగలను సర్?"
       : lang === "hindi"
-      ? "मैं जीसीएम एंटरप्राइजेज से वेंकटेश बात कर रहा हूँ। मैं आपकी क्या सहायता कर सकता हूँ?"
-      : "Hi, I'm Venkatesh from GCM Enterprises. How can I help you?";
+      ? "मैं जीसीएम एंटरप्राइजेज से वेंकटेश बात कर रहा हूँ। मैं आपकी किस प्रकार सहायता कर सकता हूँ सर?"
+      : "Hello! I'm Venkatesh from GCM Enterprises. How can I help you?";
     saveConversationState(sessionId, state);
     return { replyText: idReply };
   }
 
-  // 2. Initial Introduction (Only ONCE per conversation)
-  const isGreetingOnly = /^(hi|hello|hey|namaste|good\s*morning|good\s*evening|good\s*afternoon|నమస్కారం|హలో|नमस्ते|హాయ్)\b/i.test(lower) && lower.split(/\s+/).length <= 3;
-  
+  // 3. Initial Introduction — Strictly ONCE per conversation (Phase 3.2)
+  const isGreetingOnly = /^(hi|hello|hey|namaste|good\s*morning|good\s*evening|good\s*afternoon|నమస్కారం|హలో|नमस्ते|హాయ్)(?:\b|\s|$)/i.test(lower) && lower.split(/\s+/).length <= 3;
+
   if (!state.introduction_completed) {
     state.introduction_completed = true;
 
     if (isGreetingOnly) {
       state.stage = "GREETING";
+      state.requirement_status = "GREETING";
       saveConversationState(sessionId, state);
       const introReply = lang === "telugu"
-        ? "నమస్కారం, నేను జిసిఎమ్ ఎంటర్‌ప్రైజెస్ నుండి వెంకటేష్ ని. నేను మీకు ఎలా సహాయపడగలను సర్?"
+        ? "నమస్కారం! నేను జిసిఎమ్ ఎంటర్‌ప్రైజెస్ నుండి వెంకటేష్ ని. నేను మీకు ఎలా సహాయపడగలను సర్?"
         : lang === "hindi"
-        ? "नमस्ते, मैं जीसीएम एंटरप्राइजेज से वेंकटेश बात कर रहा हूँ। मैं आपकी क्या सहायता कर सकता हूँ?"
-        : "Hi, I'm Venkatesh from GCM Enterprises. How can I help you?";
+        ? "नमस्ते! मैं जीसीएम एंटरप्राइजेज से वेंकटेश बात कर रहा हूँ। मैं आपकी क्या सहायता कर सकता हूँ?"
+        : "Hello! I'm Venkatesh from GCM Enterprises. How can I help you?";
       return { replyText: introReply };
     }
   }
 
-  // If customer repeats a pure greeting in an active conversation
+  // Repeated greeting in ongoing conversation
   if (isGreetingOnly && state.introduction_completed) {
     if (state.active_product_category === "landscape_grass") {
-      return { replyText: "Hi! Are you looking for balcony or ground artificial grass?" };
+      return { replyText: "Hello! Are you looking for balcony, garden, or terrace artificial grass?" };
     } else if (state.active_product_category === "cricket_net") {
-      return { replyText: "Hello! What are your cricket ground dimensions (length, width, and height)?" };
+      return { replyText: "Hello! What are your ground dimensions (Length, Width, and Height in feet)?" };
     } else if (state.active_product_category === "pigeon_safety_net") {
-      return { replyText: "Hello! What are your balcony dimensions (length and height in feet)?" };
+      return { replyText: "Hello! What are your balcony dimensions (Length and Height in feet)?" };
     } else {
-      return { replyText: "Hello! How can I assist you with your netting, grass, or grill requirement today?" };
+      return { replyText: "Hello! How can I assist you with safety nets, cricket netting, grass, or invisible grills today?" };
     }
   }
 
-  // 3. Product Category Detection & Clean Switching
-  const detectedCat = detectProductCategory(userText);
-  if (detectedCat && detectedCat !== state.active_product_category) {
-    switchProductCategory(state, detectedCat);
+  // 4. Product Education or Comparison Interception (Does NOT switch active product!)
+  const eduReply = handleProductEducationAndComparison(userText, state.active_product_category);
+  if (eduReply) {
+    state.stage = "PRODUCT_EDUCATION";
+    saveConversationState(sessionId, state);
+    return { replyText: eduReply };
   }
 
-  // ── 3A. Turnkey Project Request ───────────────────────────────────────────
-  if (state.active_product_category === "turnkey_project" || lower.includes("turnkey") || lower.includes("box cricket cost")) {
-    const dims = extractDimensions(userText);
-    if (dims.length && dims.width) {
-      const L = dims.length;
-      const W = dims.width;
-      const H = dims.height || 25;
-      const turnkey = calculateTurnkeyBoxCricket({ lengthFt: L, widthFt: W, heightFt: H });
-      state.stage = "ESTIMATE_PREPARED";
-      saveConversationState(sessionId, state);
+  // 5. Product Category Detection & Intent-based Switching (Phase 7)
+  const detectedCat = detectProductCategory(userText);
+  if (detectedCat && !isProductComparisonQuestion(userText)) {
+    if (detectedCat !== state.active_product_category) {
+      switchProductCategory(state, detectedCat);
+    }
+  }
 
-      const reply = `For a turnkey box cricket ground of ${L}x${W}x${H} ft (${turnkey.dimensions.groundAreaSft.toLocaleString("en-IN")} SFT), the complete turnkey project estimate is ₹${turnkey.grandTotal.toLocaleString("en-IN")} including concrete pitch, steel cage fabrication, 50mm non-infill sports turf, 2.5mm heavy-duty enclosure netting, and 8x stadium floodlights. Would you like to schedule a site inspection?`;
+  // 6. Unknown Dimensions / Physical Site Visit (Phase 6 — No invented ₹300 fee!)
+  const isUnknownDimensions = /(don'?t\s*know|do\s*not\s*know|not\s*sure|no\s*idea|cannot\s*measure|can'?t\s*measure|no\s*measurements?|theliyadu|maloom\s*nahi|pata\s*nahi)/i.test(lower);
+  const isSiteVisitRequested = /(site\s*visit|come\s*and\s*measure|visit\s*my\s*place|send\s*someone|vastara|chustara|inspection|doorstep\s*visit)/i.test(lower);
+
+  if (isUnknownDimensions || isSiteVisitRequested) {
+    state.stage = "SITE_VISIT_REQUESTED";
+    saveConversationState(sessionId, state);
+
+    if (state.active_product_category === "landscape_grass" || state.active_product_category === "sports_turf") {
       return {
-        replyText: reply,
-        cardType: "turnkey_boq",
-        cardData: turnkey
+        replyText: "Artificial grass is supplied in full rolls of 540 SFT. You can measure the approximate length and width with a measuring tape, or share site photos so our team can guide your roll requirement."
       };
     }
 
-    state.stage = "REQUIREMENT_COLLECTION";
-    saveConversationState(sessionId, state);
     return {
-      replyText: "Yes, we undertake turnkey sports ground setup including turf, cage netting, and fabrication based on site specifications. What are your ground dimensions and site location to discuss the scope?"
+      replyText: "You can measure the approximate length and height using a standard tape, or share balcony photos. In supported service areas, our technical team can also conduct a physical site inspection. Applicable visit charges will be confirmed by our team before scheduling. Would you like to share your location and contact details for a site visit?"
     };
   }
 
-  // ── 3B. Unknown Dimensions / Site Visit Rules (No hardcoded ₹300 fee) ───────
-  const isUnknownDimensions = /(don'?t\s*know|do\s*not\s*know|not\s*sure|no\s*idea|cannot\s*measure|can'?t\s*measure|no\s*measurements?|measurements?\s*lekapothe|theliyadu|maloom\s*nahi|pata\s*nahi)/i.test(lower);
-  const isSiteVisitRequested = /(site\s*visit|come\s*and\s*measure|visit\s*my\s*place|send\s*someone|vastara|chustara|inspection)/i.test(lower);
+  // 7. If no product category identified yet, ask focused discovery question
+  if (!state.active_product_category) {
+    state.stage = "INTENT_DISCOVERY";
+    saveConversationState(sessionId, state);
+    return {
+      replyText: "Which product are you looking for: balcony safety nets, cricket nets, artificial grass, invisible grills, or cloth hangers?"
+    };
+  }
 
-  if (isUnknownDimensions || isSiteVisitRequested) {
-    if (state.active_product_category === "landscape_grass" || state.active_product_category === "sports_turf") {
+  // ── 8. CATEGORY: INVISIBLE GRILLS (Phase 4.7 — Zero Assumptions) ────────────
+  if (state.active_product_category === "invisible_grill") {
+    const dims = extractDimensions(userText);
+    if (dims.areaSft) {
+      if (!state.confirmed_dimensions) state.confirmed_dimensions = {};
+      state.confirmed_dimensions.areaSft = dims.areaSft;
+      if (dims.length) state.confirmed_dimensions.length = dims.length;
+      if (dims.width) state.confirmed_dimensions.width = dims.width;
+    }
+
+    const cityMatch = userText.match(/\b(hyderabad|secunderabad|bangalore|bengaluru|chennai|vijayawada|visakhapatnam|vizag|guntur|warangal|pune|mumbai)\b/i);
+    if (cityMatch) {
+      state.customer_location = cityMatch[1].charAt(0).toUpperCase() + cityMatch[1].slice(1).toLowerCase();
+    }
+
+    // Extract wire diameter & spacing if provided
+    if (lower.includes("3.0mm") || lower.includes("3mm")) state.selected_material = "3.0mm";
+    else if (lower.includes("2.5mm")) state.selected_material = "2.5mm";
+    else if (lower.includes("2.0mm") || lower.includes("2mm")) state.selected_material = "2.0mm";
+
+    // 8A. Missing dimensions
+    if (!state.confirmed_dimensions?.areaSft) {
+      state.stage = "REQUIREMENT_COLLECTION";
+      saveConversationState(sessionId, state);
+      return { replyText: "What are your balcony dimensions (Length and Height in feet), or the approximate total square feet?" };
+    }
+
+    // 8B. Missing wire diameter / spacing — NEVER ASSUME 2.5mm
+    if (!state.selected_material) {
       state.stage = "PRODUCT_EDUCATION";
       saveConversationState(sessionId, state);
       return {
-        replyText: "Artificial grass is material supply-only by full rolls (540 SFT/roll). You can measure the approximate length and width with a measuring tape, or share site photos so we can guide your roll estimate."
+        replyText: "For AISI 316 Marine Grade invisible grills, we offer 2.0mm, 2.5mm, and 3.0mm cable diameters with 2-inch or 3-inch spacing. Which wire thickness do you prefer?"
       };
-    } else {
+    }
+
+    // 8C. Missing Location — NEVER ASSUME Hyderabad
+    if (!state.customer_location) {
       state.stage = "REQUIREMENT_COLLECTION";
       saveConversationState(sessionId, state);
-      return {
-        replyText: "You can measure the length and height in feet using a standard measuring tape, or share balcony photos. In Hyderabad, we can also schedule our technical team for an on-site laser measurement visit. Would you like to schedule a visit?"
-      };
+      return { replyText: "Which city or locality is the installation required in?" };
     }
-  }
 
-  // ── 3C. Customer Frustration Guardrail ─────────────────────────────────────
-  const isFrustrated = /(not\s*getting\s*my\s*point|not\s*understanding|don'?t\s*understand|not\s*listening|you\s*are\s*not\s*getting|point\s*artham|artham\s*kavatledu|samajh\s*nahi)/i.test(lower);
-  if (isFrustrated) {
-    saveConversationState(sessionId, state);
-    return {
-      replyText: "Apologies for the confusion, sir! Let me help you directly. Could you please share your site measurements or requirement so I can assist you accurately?"
-    };
-  }
+    const area = state.confirmed_dimensions.areaSft;
+    const isOutsideHyd = state.customer_location.toLowerCase() !== "hyderabad" && state.customer_location.toLowerCase() !== "secunderabad";
 
-  // ── 3D. Intercept Customer Product Questions / Inquiries First ────────────
-  const productInquiryReply = handleProductInquiry(userText, state.active_product_category, state);
-  if (productInquiryReply) {
-    state.stage = "PRODUCT_EDUCATION";
-    saveConversationState(sessionId, state);
-    return { replyText: productInquiryReply };
-  }
-
-  // If no active category yet, ask to identify
-  if (!state.active_product_category) {
-    state.stage = "DISCOVERY";
-    saveConversationState(sessionId, state);
-    return {
-      replyText: "Sure. Which product are you looking for: cricket nets, balcony safety nets, artificial grass, or invisible grills?"
-    };
-  }
-
-  // ── 4. CATEGORY: LANDSCAPE ARTIFICIAL GRASS (540 SFT Roll Rule) ─────────────
-  if (state.active_product_category === "landscape_grass") {
-    if (lower.includes("installation") || lower.includes("fitting") || lower.includes("fit cheyali")) {
-      state.supply_or_installation = "supply_only";
+    // 8D. Confirmation check before calculation
+    const isCustomerConfirming = /^(yes|sure|proceed|ok|okay|calculate|quote|tell\s*me|avunu|sare|ha)\b/i.test(lower);
+    if (!isCustomerConfirming && state.stage !== "REQUIREMENT_CONFIRMATION") {
+      state.stage = "REQUIREMENT_CONFIRMATION";
+      state.profile.customerConfirmed = true;
       saveConversationState(sessionId, state);
       return {
-        replyText: "All artificial grass and sports turf products are supply only at the configured material prices. Installation is to be arranged by the customer locally."
+        replyText: `So you require AISI 316 Invisible Grills (${state.selected_material} cable) for ${area} SFT in ${state.customer_location} with professional installation and track fixings. Shall I calculate the estimate?`
       };
     }
 
+    // 8E. Deterministic Calculation
+    const calc = calculateInvisibleGrills({
+      totalAreaSft: area,
+      isOutsideHyderabad: isOutsideHyd,
+      locationCity: state.customer_location,
+      wireDiameter: (state.selected_material as '2.5mm' | '2.0mm' | '3.0mm') || '2.5mm',
+      spacing: "2-inch"
+    });
+
+    state.stage = "ESTIMATE_PREPARED";
+    state.active_quote = calc;
+    saveConversationState(sessionId, state);
+
+    const reply = `AISI 316 Marine Stainless Steel Invisible Grills:\n` +
+      `• Area: ${area} SFT (${calc.slabName})\n` +
+      `• Cable Specification: ${state.selected_material} AISI 316 SS (DuPont nylon coated)\n` +
+      `• Rate: ${calc.isMinimumBillingApplied ? "₹10,000 fixed minimum (under 60 SFT)" : `₹${calc.effectiveRatePerSft}/SFT`}\n` +
+      `• Location: ${state.customer_location} ${isOutsideHyd ? "(+₹30/SFT outside Hyderabad)" : ""}\n` +
+      `• Installation: Included with high-grade aluminum track fixings\n` +
+      `• Warranty: 10-Year Materials Warranty, 3-Year Free Service\n` +
+      `• Total Estimate: ₹${calc.totalAmount.toLocaleString("en-IN")}\n\n` +
+      `Would you like to schedule an on-site sample demonstration?`;
+
+    return {
+      replyText: reply,
+      cardType: "calculation",
+      cardData: calc
+    };
+  }
+
+  // ── 9. CATEGORY: CLOTH DRYING HANGERS (Phase 4.8 — Zero Assumptions) ──────
+  if (state.active_product_category === "cloth_hanger") {
+    const isWallMount = lower.includes("wall");
+    const isCeilingMount = lower.includes("ceiling") || lower.includes("pulley");
+
+    if (isWallMount) state.selected_material = "wall";
+    else if (isCeilingMount) state.selected_material = "ceiling";
+
+    const sizeMatch = userText.match(/\b([45678])\s*(?:ft|feet|foot|'|rod)\b/i);
+    if (sizeMatch) {
+      if (!state.confirmed_dimensions) state.confirmed_dimensions = {};
+      state.confirmed_dimensions.length = parseInt(sizeMatch[1], 10);
+    }
+
+    const qtyMatch = userText.match(/(\d+)\s*(?:hangers?|units?|sets?|nos?|pieces?)\b/i);
+    if (qtyMatch) {
+      state.profile.quantity = parseInt(qtyMatch[1], 10);
+    }
+
+    const cityMatch = userText.match(/\b(hyderabad|secunderabad|bangalore|bengaluru|chennai|vijayawada|visakhapatnam|vizag|guntur|warangal)\b/i);
+    if (cityMatch) {
+      state.customer_location = cityMatch[1].charAt(0).toUpperCase() + cityMatch[1].slice(1).toLowerCase();
+    }
+
+    // 9A. Missing Mounting Type
+    if (!state.selected_material) {
+      state.stage = "PRODUCT_EDUCATION";
+      saveConversationState(sessionId, state);
+      return { replyText: "Do you prefer Ceiling-Mounted (individual pulley operation) or Wall-Mounted foldable cloth drying hangers?" };
+    }
+
+    // 9B. Missing Size — NEVER ASSUME 6 FT
+    if (!state.confirmed_dimensions?.length) {
+      state.stage = "REQUIREMENT_COLLECTION";
+      saveConversationState(sessionId, state);
+      return { replyText: "Which length do you require: 4ft, 5ft, 6ft, 7ft, or 8ft?" };
+    }
+
+    // 9C. Missing Quantity — NEVER ASSUME 1 UNIT
+    if (!state.profile.quantity) {
+      state.stage = "REQUIREMENT_COLLECTION";
+      saveConversationState(sessionId, state);
+      return { replyText: "How many cloth hanger units do you require?" };
+    }
+
+    // 9D. Missing Location — NEVER ASSUME Hyderabad
+    if (!state.customer_location) {
+      state.stage = "REQUIREMENT_COLLECTION";
+      saveConversationState(sessionId, state);
+      return { replyText: "Which city is the installation required in?" };
+    }
+
+    const sizeFt = state.confirmed_dimensions.length as ClothHangerSize;
+    const mounting = state.selected_material as ClothHangerMounting;
+    const qty = state.profile.quantity || 1;
+    const isOutsideHyd = state.customer_location.toLowerCase() !== "hyderabad" && state.customer_location.toLowerCase() !== "secunderabad";
+
+    // 9E. Confirmation check
+    const isCustomerConfirming = /^(yes|sure|proceed|ok|okay|calculate|quote|tell\s*me|avunu|sare|ha)\b/i.test(lower);
+    if (!isCustomerConfirming && state.stage !== "REQUIREMENT_CONFIRMATION") {
+      state.stage = "REQUIREMENT_CONFIRMATION";
+      state.profile.customerConfirmed = true;
+      saveConversationState(sessionId, state);
+      return {
+        replyText: `So you need ${qty} unit(s) of ${sizeFt}ft SS304 6-rod ${mounting}-mounted cloth hanger with complete installation in ${state.customer_location}. Shall I calculate the estimate?`
+      };
+    }
+
+    // 9F. Deterministic Calculation
+    const calc = calculateClothHanger({
+      sizeFt,
+      mountingType: mounting,
+      quantity: qty,
+      isOutsideHyderabad: isOutsideHyd,
+      locationCity: state.customer_location
+    });
+
+    state.stage = "ESTIMATE_PREPARED";
+    state.active_quote = calc;
+    saveConversationState(sessionId, state);
+
+    const reply = `SS304 6-Rod Cloth Drying Hanger (${calc.mountingLabel}):\n` +
+      `• Specification: 6 SS304 stainless steel pipes (16mm diameter), metal brackets, 4mm ropes\n` +
+      `• Size: ${calc.sizeFt} Feet (${qty} unit${qty > 1 ? 's' : ''})\n` +
+      `• Unit Price: ₹${calc.finalUnitPrice.toLocaleString("en-IN")}/unit ${isOutsideHyd ? "(includes ₹500 outstation charge)" : ""}\n` +
+      `• Installation: Included with stainless steel fasteners\n` +
+      `• Warranty: 2-Year Written Guarantee (ropes excluded)\n` +
+      `• Total Amount: ₹${calc.totalAmount.toLocaleString("en-IN")}\n\n` +
+      `Would you like to reserve an installation appointment?`;
+
+    return {
+      replyText: reply,
+      cardType: "calculation",
+      cardData: calc
+    };
+  }
+
+  // ── 10. CATEGORY: BALCONY SAFETY & PIGEON NETS (100 SFT Boundary) ───────────
+  if (state.active_product_category === "pigeon_safety_net") {
+    const dims = extractDimensions(userText);
+    if (dims.areaSft) {
+      if (!state.confirmed_dimensions) state.confirmed_dimensions = {};
+      state.confirmed_dimensions.areaSft = dims.areaSft;
+      state.confirmed_dimensions.length = dims.length;
+      state.confirmed_dimensions.width = dims.width;
+    }
+
+    const cityMatch = userText.match(/\b(hyderabad|secunderabad|bangalore|bengaluru|chennai|vijayawada|visakhapatnam|vizag|guntur|warangal)\b/i);
+    if (cityMatch) {
+      state.customer_location = cityMatch[1].charAt(0).toUpperCase() + cityMatch[1].slice(1).toLowerCase();
+    }
+
+    // Material selection
+    if (lower.includes("1.5mm") && (lower.includes("30mm") || lower.includes("twisted"))) state.selected_material = "1.5mm_30mm";
+    else if ((lower.includes("2.5mm") || lower.includes("2.5")) && lower.includes("40mm")) state.selected_material = "2.5mm_40mm";
+    else if (lower.includes("2.5mm") || lower.includes("2.5") || lower.includes("monkey") || lower.includes("pet")) state.selected_material = "2.5mm_45mm";
+    else if ((lower.includes("2mm") || lower.includes("2.0mm") || lower.includes("2.0")) && lower.includes("40mm")) state.selected_material = "2.0mm_40mm";
+    else if (lower.includes("2mm") || lower.includes("2.0mm") || lower.includes("2.0") || lower.includes("pigeon") || lower.includes("child")) state.selected_material = "2.0mm_45mm";
+
+    // 10A. Missing dimensions
+    if (!state.confirmed_dimensions?.areaSft) {
+      state.stage = "REQUIREMENT_COLLECTION";
+      saveConversationState(sessionId, state);
+      return { replyText: "What are your balcony dimensions (Length and Height in feet), or the approximate total area?" };
+    }
+
+    const area = state.confirmed_dimensions.areaSft;
+
+    // 10B. Missing material
+    if (!state.selected_material) {
+      state.stage = "PRODUCT_EDUCATION";
+      saveConversationState(sessionId, state);
+      return {
+        replyText: `For your ${area} SFT balcony, we offer genuine RUSSEA™ 2.0mm (standard bird & child safety with 5-year warranty) or 2.5mm braided (heavy-duty monkey & pet safety, 8-year life / 5-year warranty). Which quality do you prefer?`
+      };
+    }
+
+    // 10C. Missing location
+    if (!state.customer_location) {
+      state.stage = "REQUIREMENT_COLLECTION";
+      saveConversationState(sessionId, state);
+      return { replyText: "Which city or area is your balcony located in?" };
+    }
+
+    // 10D. Confirmation check
+    const isCustomerConfirming = /^(yes|sure|proceed|ok|okay|calculate|quote|tell\s*me|avunu|sare|ha)\b/i.test(lower);
+    if (!isCustomerConfirming && state.stage !== "REQUIREMENT_CONFIRMATION") {
+      state.stage = "REQUIREMENT_CONFIRMATION";
+      state.profile.customerConfirmed = true;
+      saveConversationState(sessionId, state);
+      const qualityName = state.selected_material.includes("2.5mm") ? "2.5mm Heavy-Duty Braided Net" : "2.0mm Braided Net";
+      return {
+        replyText: `So you require genuine RUSSEA™ ${qualityName} for ${area} SFT in ${state.customer_location} with complete installation and stainless steel fasteners. Shall I calculate the estimate?`
+      };
+    }
+
+    // 10E. Deterministic Calculation (Strictly adheres to 7 slabs & exact 100 SFT boundary)
+    const qualityId = (state.selected_material || "2.0mm_45mm") as InstalledNetQualityId;
+    const calc = calculateInstalledSafetyNet(qualityId, area, "standard");
+
+    state.stage = "ESTIMATE_PREPARED";
+    state.active_quote = calc;
+    saveConversationState(sessionId, state);
+
+    const reply = `Material: Genuine RUSSEA™ ${calc.qualityName}\n` +
+      `• Balcony Area: ${area} SFT\n` +
+      `• Rate: ${calc.isFixedMinimumApplied ? `₹${calc.totalAmount} (Fixed Minimum for under 100 SFT)` : `₹${calc.appliedRatePerSft}/SFT`}\n` +
+      `• Installation: Included (Stainless Steel Fasteners & drum-tight border rigging)\n` +
+      `• Warranty: 5 Years Written Replacement Warranty (8 years expected service life)\n` +
+      `• Total Estimate: ₹${calc.totalAmount.toLocaleString("en-IN")}\n` +
+      `• Location: ${state.customer_location}\n\n` +
+      `Would you like to reserve a measurement and installation slot?`;
+
+    return {
+      replyText: reply,
+      cardType: "calculation",
+      cardData: calc
+    };
+  }
+
+  // ── 11. CATEGORY: CRICKET NETS (Phase 4.3 — Zero Assumptions) ───────────────
+  if (state.active_product_category === "cricket_net") {
+    const dims = extractDimensions(userText);
+    if (!state.confirmed_dimensions) state.confirmed_dimensions = {};
+
+    if (dims.length && dims.width) {
+      state.confirmed_dimensions.length = dims.length;
+      state.confirmed_dimensions.width = dims.width;
+      if (dims.height) state.confirmed_dimensions.height = dims.height;
+    } else if (dims.areaSft) {
+      state.confirmed_dimensions.areaSft = dims.areaSft;
+    }
+
+    // Pole-to-pole confirmation
+    if (lower.includes("pole to pole") || lower.includes("pole-to-pole") || lower.includes("exact pole")) {
+      state.confirmed_dimensions.isPoleToPole = true;
+      state.confirmed_dimensions.measurementConfirmed = true;
+    } else if (lower.includes("already included") || lower.includes("with extra") || lower.includes("extra included")) {
+      state.confirmed_dimensions.isPoleToPole = false;
+      state.confirmed_dimensions.measurementConfirmed = true;
+    }
+
+    // Top net confirmation — Phase 4.3 rule: NEVER assume top net!
+    if (lower.includes("only sides") || lower.includes("no top") || lower.includes("without top") || lower.includes("no roof") || lower.includes("sides only") || lower.includes("side nets only") || lower.includes("side netting only") || lower.includes("only side")) {
+      state.confirmed_dimensions.hasTop = false;
+    } else if (lower.includes("with top") || lower.includes("include top") || lower.includes("roof net") || lower.includes("with roof")) {
+      state.confirmed_dimensions.hasTop = true;
+    }
+
+    if (lower.includes("2.5mm") && lower.includes("40mm")) state.selected_material = "2.5mm_40mm";
+    else if (lower.includes("2.5mm") || lower.includes("2.5mm 45mm")) state.selected_material = "2.5mm_45mm";
+    else if (lower.includes("2mm") && lower.includes("40mm")) state.selected_material = "2.0mm_40mm";
+    else if (lower.includes("2mm") || lower.includes("2mm 45mm")) state.selected_material = "2.0mm_45mm";
+
+    const cityMatch = userText.match(/\b(hyderabad|bangalore|bengaluru|chennai|vijayawada|visakhapatnam|vizag|guntur|warangal|pune|mumbai|delhi)\b/i);
+    if (cityMatch) {
+      state.customer_location = cityMatch[1].charAt(0).toUpperCase() + cityMatch[1].slice(1).toLowerCase();
+    }
+
+    // Direct SFT Braided Bag Order
+    if (state.confirmed_dimensions.areaSft && !state.confirmed_dimensions.length) {
+      const area = state.confirmed_dimensions.areaSft;
+      const fullBags = Math.ceil(area / 3300);
+      const suppliedSft = fullBags * 3300;
+
+      if (!state.selected_material) {
+        state.stage = "PRODUCT_EDUCATION";
+        saveConversationState(sessionId, state);
+        return {
+          replyText: `Braided nets are supplied in 3,300 SFT full bags. For ${area.toLocaleString("en-IN")} SFT, ${fullBags} full bags (${suppliedSft.toLocaleString("en-IN")} SFT) will be supplied. We offer 2mm and 2.5mm braided nets (45mm mesh is the preferred economical choice). Which do you prefer?`
+        };
+      }
+
+      if (!state.customer_location) {
+        state.stage = "REQUIREMENT_COLLECTION";
+        saveConversationState(sessionId, state);
+        return { replyText: "Which city should this order be dispatched to?" };
+      }
+
+      const isCustomerConfirming = /^(yes|sure|proceed|ok|okay|calculate|quote|tell\s*me|avunu|sare|ha)\b/i.test(lower);
+      if (!isCustomerConfirming && state.stage !== "REQUIREMENT_CONFIRMATION") {
+        state.stage = "REQUIREMENT_CONFIRMATION";
+        state.profile.customerConfirmed = true;
+        saveConversationState(sessionId, state);
+        return {
+          replyText: `So you need ${fullBags} full bags of ${state.selected_material} braided netting (${suppliedSft.toLocaleString("en-IN")} SFT) for delivery to ${state.customer_location}. Shall I calculate the estimate?`
+        };
+      }
+
+      const calc = calculateCricketBraidedBags({
+        variant: state.selected_material as any,
+        fullBags,
+        halfBags: 0,
+        mixedBagPolicy: "SEPARATE_TIERS",
+        gstRate: 5.0
+      });
+
+      state.stage = "ESTIMATE_PREPARED";
+      state.active_quote = calc;
+      saveConversationState(sessionId, state);
+
+      const reply = `Cricket Net Material Estimate:\n` +
+        `• Material: ${state.selected_material} Braided Net\n` +
+        `• Required Area: ${area.toLocaleString("en-IN")} SFT\n` +
+        `• Supply Quantity: ${fullBags} Full Bag(s) (${suppliedSft.toLocaleString("en-IN")} SFT)\n` +
+        `• Rate: ₹${calc.fullBagRatePerSft.toFixed(2)}/SFT\n` +
+        `• Material Subtotal: ₹${calc.subtotal.toLocaleString("en-IN")}\n` +
+        `• GST (5%): ₹${calc.gstAmount.toLocaleString("en-IN")}\n` +
+        `• Grand Total: ₹${calc.totalWithGst.toLocaleString("en-IN")}\n` +
+        `• Delivery: To ${state.customer_location} (freight separate)\n\n` +
+        `Would you like to proceed with this order?`;
+
+      return {
+        replyText: reply,
+        cardType: "calculation",
+        cardData: calc
+      };
+    }
+
+    // 11A. Missing dimensions
+    if (!state.confirmed_dimensions.length || !state.confirmed_dimensions.width) {
+      state.stage = "REQUIREMENT_COLLECTION";
+      saveConversationState(sessionId, state);
+      return { replyText: "What are your ground dimensions: Length, Width, and Height in feet?" };
+    }
+
+    // 11B. Missing Height — NEVER ASSUME 25 FT
+    if (!state.confirmed_dimensions.height) {
+      state.stage = "REQUIREMENT_COLLECTION";
+      saveConversationState(sessionId, state);
+      return { replyText: "What is the height of your cricket ground or practice cage in feet?" };
+    }
+
+    // 11C. Missing Top Net Confirmation — NEVER ASSUME TOP NET
+    if (state.confirmed_dimensions.hasTop === undefined) {
+      state.stage = "REQUIREMENT_COLLECTION";
+      saveConversationState(sessionId, state);
+      return { replyText: "Do you require an overhead top net, or side boundary netting only?" };
+    }
+
+    // 11D. Missing Pole-to-pole confirmation
+    if (state.confirmed_dimensions.measurementConfirmed !== true) {
+      state.stage = "REQUIREMENT_COLLECTION";
+      saveConversationState(sessionId, state);
+      return { replyText: "Are these dimensions pole-to-pole, or have you already included extra allowance for installation and folding?" };
+    }
+
+    // 11E. Missing Material
+    if (!state.selected_material) {
+      state.stage = "PRODUCT_EDUCATION";
+      saveConversationState(sessionId, state);
+      return { replyText: "For side netting, we offer 2.0mm and 2.5mm braided nets (45mm mesh is the preferred economical choice). Which thickness do you prefer?" };
+    }
+
+    // 11F. Missing Location
+    if (!state.customer_location) {
+      state.stage = "REQUIREMENT_COLLECTION";
+      saveConversationState(sessionId, state);
+      return { replyText: "Which city should this shipment be dispatched to?" };
+    }
+
+    const L = state.confirmed_dimensions.length;
+    const W = state.confirmed_dimensions.width;
+    const H = state.confirmed_dimensions.height;
+    const hasTop = state.confirmed_dimensions.hasTop;
+
+    // 11G. Customer Confirmation check
+    const isCustomerConfirming = /^(yes|sure|proceed|ok|okay|calculate|quote|tell\s*me|avunu|sare|ha)\b/i.test(lower);
+    if (!isCustomerConfirming && state.stage !== "REQUIREMENT_CONFIRMATION") {
+      state.stage = "REQUIREMENT_CONFIRMATION";
+      state.profile.customerConfirmed = true;
+      saveConversationState(sessionId, state);
+      return {
+        replyText: `For your ${L}x${W}x${H} ft ground (${hasTop ? 'with top net' : 'side nets only'}), we will supply ${state.selected_material} braided netting for dispatch to ${state.customer_location}. Shall I calculate the estimate?`
+      };
+    }
+
+    // 11H. Mathematical Calculation via deterministic formula
+    // Without top: 2 * L * H + 2 * W * H
+    // With top: L * W + 2 * L * H + 2 * W * H
+    const sideSft = 2 * L * H + 2 * W * H;
+    const topSft = hasTop ? L * W : 0;
+    const fullBags = Math.ceil(sideSft / 3300);
+
+    const sideCalc = calculateCricketBraidedBags({
+      variant: state.selected_material as any,
+      fullBags,
+      halfBags: 0,
+      mixedBagPolicy: "SEPARATE_TIERS",
+      gstRate: 5.0
+    });
+
+    let topCalc: any = null;
+    let grandTotal = sideCalc.totalWithGst;
+
+    if (hasTop && topSft > 0) {
+      topCalc = calculateTwisted15Netting(topSft, true);
+      grandTotal += topCalc.grandTotal;
+    }
+
+    state.stage = "ESTIMATE_PREPARED";
+    saveConversationState(sessionId, state);
+
+    let reply = `CRICKET NET MATERIAL ESTIMATE (${L}x${W}x${H} ft):\n` +
+      `• Scope: ${hasTop ? 'Side and Top Netting' : 'Side Netting Only'}\n` +
+      `• Side Netting: ${sideSft.toLocaleString("en-IN")} SFT -> ${fullBags} Full Bag(s) of ${state.selected_material} = ₹${sideCalc.totalWithGst.toLocaleString("en-IN")} (incl. 5% GST)\n`;
+
+    if (hasTop && topCalc) {
+      reply += `• Top Netting: ${topSft.toLocaleString("en-IN")} SFT (1.5mm Twisted 40mm) = ₹${topCalc.grandTotal.toLocaleString("en-IN")} (incl. 5% GST)\n`;
+    }
+
+    reply += `• Material Total: ₹${grandTotal.toLocaleString("en-IN")}\n` +
+      `• Delivery: To ${state.customer_location} (freight extra at actuals)\n` +
+      `• Scope: Material supply only\n\n` +
+      `Would you like to proceed with this order?`;
+
+    return {
+      replyText: reply,
+      cardType: "calculation",
+      cardData: { sideCalc, topCalc, grandTotal }
+    };
+  }
+
+  // ── 12. CATEGORY: LANDSCAPE GRASS (540 SFT Roll Rule) ───────────────────────
+  if (state.active_product_category === "landscape_grass") {
     const explicitRolls = extractRolls(userText);
     const dims = extractDimensions(userText);
 
@@ -388,21 +847,17 @@ export function handleSalesConversation(input: SalesConsultantInput): SalesConsu
       state.customer_location = cityMatch[1].charAt(0).toUpperCase() + cityMatch[1].slice(1).toLowerCase();
     }
 
-    if (!state.confirmed_dimensions?.areaSft) {
+    if (!state.confirmed_dimensions?.areaSft && !state.confirmed_dimensions?.rolls) {
       state.stage = "REQUIREMENT_COLLECTION";
       saveConversationState(sessionId, state);
-      return { replyText: "What is your measured area, or do you have the length and width?" };
+      return { replyText: "What are your lawn or balcony dimensions (Length and Width in feet)?" };
     }
 
     if (!state.selected_material) {
-      state.stage = "PRODUCT_RECOMMENDATION";
+      state.stage = "PRODUCT_EDUCATION";
       saveConversationState(sessionId, state);
-      return { replyText: "Which thickness do you prefer: 25mm (₹24), 35mm (₹28), 40mm (₹32), or 50mm (₹36) per SFT?" };
+      return { replyText: "Which pile height do you prefer: 25mm (₹24), 35mm (₹28), 40mm (₹32), or 50mm (₹36) per SFT?" };
     }
-
-    const reqSft = state.confirmed_dimensions.areaSft;
-    const reqRolls = state.confirmed_dimensions.rolls || Math.ceil(reqSft / ROLL_SFT_STANDARD);
-    const suppliedSft = reqRolls * ROLL_SFT_STANDARD;
 
     if (!state.customer_location) {
       state.stage = "REQUIREMENT_COLLECTION";
@@ -410,31 +865,35 @@ export function handleSalesConversation(input: SalesConsultantInput): SalesConsu
       return { replyText: "Which city or delivery location should this be dispatched to?" };
     }
 
-    const isCustomerConfirming = /^(yes|sure|proceed|ok|okay|calculate|quote|tell\s*me|send\s*quote|avunu|sare|ha|theek\s*hai)\b/i.test(lower);
+    const reqSft = state.confirmed_dimensions.areaSft || (state.confirmed_dimensions.rolls! * ROLL_SFT_STANDARD);
+    const reqRolls = state.confirmed_dimensions.rolls || Math.ceil(reqSft / ROLL_SFT_STANDARD);
+    const suppliedSft = reqRolls * ROLL_SFT_STANDARD;
+
+    const isCustomerConfirming = /^(yes|sure|proceed|ok|okay|calculate|quote|tell\s*me|avunu|sare|ha)\b/i.test(lower);
     if (!isCustomerConfirming && state.stage !== "REQUIREMENT_CONFIRMATION") {
       state.stage = "REQUIREMENT_CONFIRMATION";
+      state.profile.customerConfirmed = true;
       saveConversationState(sessionId, state);
       return {
-        replyText: `So you need ${reqRolls} rolls of ${state.selected_material} landscape grass (${suppliedSft} SFT) for delivery to ${state.customer_location} on supply-only basis. Shall I prepare the estimate?`
+        replyText: `So you need ${reqRolls} full roll(s) of ${state.selected_material} landscape grass (${suppliedSft} SFT supplied for ${reqSft} SFT required area) for dispatch to ${state.customer_location} on supply-only basis. Shall I prepare the estimate?`
       };
     }
 
-    const variant = state.selected_material as "25mm" | "35mm" | "40mm" | "50mm";
-    const calc = calculateLandscapeGrassRolls(variant, reqSft, reqRolls);
+    const calc = calculateLandscapeGrassRolls(state.selected_material as any, reqSft, reqRolls);
     state.stage = "ESTIMATE_PREPARED";
     state.active_quote = calc;
     saveConversationState(sessionId, state);
 
-    const reply = `Material: Landscape Grass (${calc.variant})\n` +
-      `Required Area: ${reqSft} SFT\n` +
-      `Supply Quantity: ${calc.requiredRolls} Full Roll(s)\n` +
-      `Supplied Area: ${calc.suppliedSft} SFT\n` +
-      `Rate: ₹${calc.finalRatePerSft}/SFT (Discount: ₹${calc.discountPerSft}/SFT)\n` +
-      `Material Subtotal: ₹${calc.materialSubtotal.toLocaleString("en-IN")}\n` +
-      `GST (5%): ₹${calc.gstAmount.toLocaleString("en-IN")}\n` +
-      `Total: ₹${calc.totalWithGst.toLocaleString("en-IN")}\n` +
-      `Delivery: To ${state.customer_location} (freight extra)\n` +
-      `Installation: Not included (supply only)\n\n` +
+    const reply = `Landscape Artificial Grass Estimate:\n` +
+      `• Thickness: ${calc.variant}\n` +
+      `• Required Ground Area: ${reqSft} SFT\n` +
+      `• Supply Quantity: ${calc.requiredRolls} Full Roll(s) (${calc.suppliedSft} SFT)\n` +
+      `• Rate: ₹${calc.finalRatePerSft}/SFT ${calc.discountPerSft > 0 ? `(includes ₹${calc.discountPerSft}/SFT volume discount)` : ''}\n` +
+      `• Material Subtotal: ₹${calc.materialSubtotal.toLocaleString("en-IN")}\n` +
+      `• GST (5%): ₹${calc.gstAmount.toLocaleString("en-IN")}\n` +
+      `• Total Amount: ₹${calc.totalWithGst.toLocaleString("en-IN")}\n` +
+      `• Delivery: To ${state.customer_location} (freight extra at actuals)\n` +
+      `• Installation: Material supply only\n\n` +
       `Would you like to proceed with this order?`;
 
     return {
@@ -444,16 +903,8 @@ export function handleSalesConversation(input: SalesConsultantInput): SalesConsu
     };
   }
 
-  // ── 5. CATEGORY: PREMIUM SPORTS TURF (540 SFT Roll Rule) ───────────────────
+  // ── 13. CATEGORY: SPORTS TURF (540 SFT Roll Rule & Slabs) ───────────────────
   if (state.active_product_category === "sports_turf") {
-    if (lower.includes("installation") || lower.includes("fitting")) {
-      state.supply_or_installation = "supply_only";
-      saveConversationState(sessionId, state);
-      return {
-        replyText: "Sports turf is material supply only, sir. Installation, adhesive, and transport are charged separately as per project scope."
-      };
-    }
-
     const explicitRolls = extractRolls(userText);
     const dims = extractDimensions(userText);
 
@@ -480,14 +931,14 @@ export function handleSalesConversation(input: SalesConsultantInput): SalesConsu
       state.customer_location = cityMatch[1].charAt(0).toUpperCase() + cityMatch[1].slice(1).toLowerCase();
     }
 
-    if (!state.confirmed_dimensions?.areaSft) {
+    if (!state.confirmed_dimensions?.areaSft && !state.confirmed_dimensions?.rolls) {
       state.stage = "REQUIREMENT_COLLECTION";
       saveConversationState(sessionId, state);
-      return { replyText: "What is your sports turf area in square feet or pitch dimensions?" };
+      return { replyText: "What is your ground area in square feet or length and width?" };
     }
 
     if (!state.selected_material) {
-      state.stage = "PRODUCT_RECOMMENDATION";
+      state.stage = "PRODUCT_EDUCATION";
       saveConversationState(sessionId, state);
       return { replyText: "Which turf specification do you require: 15mm Multisports (₹85), 30mm Non-Infill (₹85), or 50mm Infill (₹80–₹100) per SFT?" };
     }
@@ -495,428 +946,39 @@ export function handleSalesConversation(input: SalesConsultantInput): SalesConsu
     if (!state.customer_location) {
       state.stage = "REQUIREMENT_COLLECTION";
       saveConversationState(sessionId, state);
-      return { replyText: "Which delivery location should this sports turf be dispatched to?" };
+      return { replyText: "Which delivery city should this sports turf be dispatched to?" };
     }
 
-    const reqSft = state.confirmed_dimensions.areaSft;
+    const reqSft = state.confirmed_dimensions.areaSft || (state.confirmed_dimensions.rolls! * ROLL_SFT_STANDARD);
     const reqRolls = state.confirmed_dimensions.rolls || Math.ceil(reqSft / ROLL_SFT_STANDARD);
     const suppliedSft = reqRolls * ROLL_SFT_STANDARD;
 
     const isCustomerConfirming = /^(yes|sure|proceed|ok|okay|calculate|quote|tell\s*me|avunu|sare|ha)\b/i.test(lower);
     if (!isCustomerConfirming && state.stage !== "REQUIREMENT_CONFIRMATION") {
       state.stage = "REQUIREMENT_CONFIRMATION";
+      state.profile.customerConfirmed = true;
       saveConversationState(sessionId, state);
       return {
-        replyText: `So you need ${reqRolls} rolls of ${SPORTS_TURF_CATALOG[state.selected_material]?.name || state.selected_material} (${suppliedSft} SFT) for delivery to ${state.customer_location} on supply-only basis. Shall I prepare the estimate?`
+        replyText: `So you need ${reqRolls} rolls of ${SPORTS_TURF_CATALOG[state.selected_material]?.name || state.selected_material} (${suppliedSft} SFT supplied) for dispatch to ${state.customer_location} on supply-only basis. Shall I prepare the estimate?`
       };
     }
 
-    const calc = calculateSportsTurfRolls(state.selected_material, reqSft, reqRolls);
+    const calc = calculateSportsTurfRolls(state.selected_material as any, reqSft, reqRolls);
     state.stage = "ESTIMATE_PREPARED";
     state.active_quote = calc;
     saveConversationState(sessionId, state);
 
-    const reply = `Material: ${calc.name}\n` +
-      `Required Area: ${reqSft} SFT\n` +
-      `Supply Quantity: ${calc.requiredRolls} Full Roll(s)\n` +
-      `Supplied Area: ${calc.suppliedSft} SFT\n` +
-      `Rate: ₹${calc.finalRatePerSft}/SFT (Discount: ₹${calc.discountPerSft}/SFT)\n` +
-      `Material Subtotal: ₹${calc.materialSubtotal.toLocaleString("en-IN")}\n` +
-      `GST (5%): ₹${calc.gstAmount.toLocaleString("en-IN")}\n` +
-      `Total: ₹${calc.totalWithGst.toLocaleString("en-IN")}\n` +
-      `Delivery: To ${state.customer_location} (transport separate)\n` +
-      `Installation: Not included (supply only)\n\n` +
-      `Shall we proceed with dispatch?`;
-
-    return {
-      replyText: reply,
-      cardType: "calculation",
-      cardData: calc
-    };
-  }
-
-  // ── 6. CATEGORY: CRICKET NETS (Bags & Twisted Slabs) ───────────────────────
-  if (state.active_product_category === "cricket_net") {
-    const dims = extractDimensions(userText);
-    if (!state.confirmed_dimensions) state.confirmed_dimensions = {};
-
-    if (dims.length && dims.width) {
-      state.confirmed_dimensions.length = dims.length;
-      state.confirmed_dimensions.width = dims.width;
-      if (dims.height) state.confirmed_dimensions.height = dims.height;
-    } else if (dims.areaSft) {
-      state.confirmed_dimensions.areaSft = dims.areaSft;
-    }
-
-    if (lower.includes("pole to pole") || lower.includes("pole-to-pole") || lower.includes("without extra") || lower.includes("exact pole")) {
-      state.confirmed_dimensions.isPoleToPole = true;
-      state.confirmed_dimensions.measurementConfirmed = true;
-    } else if (lower.includes("extra included") || lower.includes("extras included") || lower.includes("already included") || lower.includes("with extra")) {
-      state.confirmed_dimensions.isPoleToPole = false;
-      state.confirmed_dimensions.measurementConfirmed = true;
-    }
-
-    if (lower.includes("2.5mm") && lower.includes("40mm")) state.selected_material = "2.5mm_40mm";
-    else if (lower.includes("2.5mm") || lower.includes("2.5mm 45mm")) state.selected_material = "2.5mm_45mm";
-    else if (lower.includes("2mm") && lower.includes("40mm")) state.selected_material = "2.0mm_40mm";
-    else if (lower.includes("2mm") || lower.includes("2mm 45mm")) state.selected_material = "2.0mm_45mm";
-
-    const cityMatch = userText.match(/\b(hyderabad|bangalore|bengaluru|chennai|vijayawada|visakhapatnam|vizag|guntur|warangal|pune|mumbai|delhi)\b/i);
-    if (cityMatch) {
-      state.customer_location = cityMatch[1].charAt(0).toUpperCase() + cityMatch[1].slice(1).toLowerCase();
-    }
-
-    // Direct SFT Braided inquiry (e.g. 11,000 SFT or 16,000 SFT)
-    if (state.confirmed_dimensions.areaSft && !state.confirmed_dimensions.length) {
-      const area = state.confirmed_dimensions.areaSft;
-      const fullBags = Math.ceil(area / 3300);
-      const suppliedSft = fullBags * 3300;
-
-      if (!state.selected_material) {
-        state.stage = "PRODUCT_RECOMMENDATION";
-        saveConversationState(sessionId, state);
-        return {
-          replyText: `For braided nets, standard packing is 3,300 SFT per full bag. For ${area.toLocaleString("en-IN")} SFT, ${fullBags} full bags (${suppliedSft.toLocaleString("en-IN")} SFT) will be supplied. We offer 2mm and 2.5mm braided nets (45mm mesh is the preferred economical choice). Which do you prefer?`
-        };
-      }
-
-      if (!state.customer_location) {
-        state.stage = "REQUIREMENT_COLLECTION";
-        saveConversationState(sessionId, state);
-        return { replyText: "Which city or delivery location should this be dispatched to?" };
-      }
-
-      const isCustomerConfirming = /^(yes|sure|proceed|ok|okay|calculate|quote|tell\s*me|avunu|sare|ha)\b/i.test(lower);
-      if (state.stage !== "REQUIREMENT_CONFIRMATION" && !isCustomerConfirming) {
-        state.stage = "REQUIREMENT_CONFIRMATION";
-        saveConversationState(sessionId, state);
-        return {
-          replyText: `So you need ${fullBags} full bags of ${state.selected_material} braided nets (${suppliedSft.toLocaleString("en-IN")} SFT) for delivery to ${state.customer_location}. Shall I calculate the estimate?`
-        };
-      }
-
-      const calc = calculateCricketBraidedBags({
-        variant: state.selected_material as any,
-        fullBags,
-        halfBags: 0,
-        mixedBagPolicy: "SEPARATE_TIERS",
-        gstRate: 5.0
-      });
-
-      state.stage = "ESTIMATE_PREPARED";
-      state.active_quote = calc;
-      saveConversationState(sessionId, state);
-
-      const reply = `Material: ${state.selected_material} Braided Net\n` +
-        `Required Area: ${area.toLocaleString("en-IN")} SFT\n` +
-        `Supply Quantity: ${fullBags} Full Bag(s)\n` +
-        `Supplied Area: ${suppliedSft.toLocaleString("en-IN")} SFT\n` +
-        `Rate: ₹${calc.fullBagRatePerSft.toFixed(2)}/SFT\n` +
-        `Material Subtotal: ₹${calc.subtotal.toLocaleString("en-IN")}\n` +
-        `GST (5%): ₹${calc.gstAmount.toLocaleString("en-IN")}\n` +
-        `Total: ₹${calc.totalWithGst.toLocaleString("en-IN")}\n` +
-        `Delivery: To ${state.customer_location} (freight separate)\n` +
-        `Installation: Not included (supply only)\n\n` +
-        `Would you like to proceed with this order?`;
-
-      return {
-        replyText: reply,
-        cardType: "calculation",
-        cardData: calc
-      };
-    }
-
-    // Missing dimensions
-    if (!state.confirmed_dimensions.length || !state.confirmed_dimensions.width) {
-      state.stage = "REQUIREMENT_COLLECTION";
-      saveConversationState(sessionId, state);
-      return { replyText: "What are your ground dimensions: Length, Width, and Height in feet?" };
-    }
-
-    if (!state.confirmed_dimensions.height) {
-      state.stage = "REQUIREMENT_COLLECTION";
-      saveConversationState(sessionId, state);
-      return { replyText: "What is the height of your cricket ground or cage in feet?" };
-    }
-
-    const L = state.confirmed_dimensions.length;
-    const W = state.confirmed_dimensions.width;
-    const H = state.confirmed_dimensions.height;
-
-    // Deterministic calculation via cricket-net-calculator
-    const netMath = calculateCricketNetting({
-      lengthFt: L,
-      widthFt: W,
-      heightFt: H,
-      includeRoof: true,
-      isPoleToPole: state.confirmed_dimensions.isPoleToPole ?? true,
-      measurementConfirmed: state.confirmed_dimensions.measurementConfirmed ?? false
-    });
-
-    // Step 2: Pole-to-pole confirmation question if unconfirmed
-    if (state.confirmed_dimensions.measurementConfirmed !== true) {
-      state.stage = "REQUIREMENT_COLLECTION";
-      saveConversationState(sessionId, state);
-      return {
-        replyText: "Are these pole-to-pole dimensions, or have you already included extra material for folding and installation?",
-        cardType: "calculation",
-        cardData: netMath
-      };
-    }
-
-    // Step 3: Material selection
-    if (!state.selected_material) {
-      state.stage = "PRODUCT_RECOMMENDATION";
-      saveConversationState(sessionId, state);
-      return {
-        replyText: "For side nets, we offer 2mm and 2.5mm braided nets (45mm or 40mm mesh). 45mm mesh is the preferred economical choice. Which would you prefer?",
-        cardType: "calculation",
-        cardData: netMath
-      };
-    }
-
-    // Step 4: Location
-    if (!state.customer_location) {
-      state.stage = "REQUIREMENT_COLLECTION";
-      saveConversationState(sessionId, state);
-      return { replyText: "Which delivery city or pincode should this be dispatched to?" };
-    }
-
-    // Step 5: Confirmation before finalized pricing
-    const isCustomerConfirming = /^(yes|sure|proceed|ok|okay|calculate|quote|tell\s*me|avunu|sare|ha)\b/i.test(lower);
-    if (!isCustomerConfirming && state.stage !== "REQUIREMENT_CONFIRMATION") {
-      state.stage = "REQUIREMENT_CONFIRMATION";
-      saveConversationState(sessionId, state);
-      return {
-        replyText: `For your ${L}x${W}x${H} ft ground, side netting requires ${netMath.sideNetting.requiredSft.toLocaleString("en-IN")} SFT (${state.selected_material}) and top netting is ${netMath.topNetting.requiredSft.toLocaleString("en-IN")} SFT for delivery to ${state.customer_location}. Shall I prepare the estimation?`,
-        cardType: "calculation",
-        cardData: netMath
-      };
-    }
-
-    // Step 6: Calculation breakdown
-    const sideSft = netMath.sideNetting.requiredSft;
-    const topSft = netMath.topNetting.requiredSft;
-    const fullBags = Math.ceil(sideSft / 3300);
-
-    const sideCalc = calculateCricketBraidedBags({
-      variant: state.selected_material as any,
-      fullBags,
-      halfBags: 0,
-      mixedBagPolicy: "SEPARATE_TIERS",
-      gstRate: 5.0
-    });
-
-    const topCalc = calculateTwisted15Netting(topSft, true);
-    const grandTotal = sideCalc.totalWithGst + topCalc.grandTotal;
-
-    state.stage = "ESTIMATE_PREPARED";
-    saveConversationState(sessionId, state);
-
-    const reply = `Cricket Netting Estimate (${L}x${W}x${H} ft Court):\n` +
-      `• Side Netting: ${sideSft.toLocaleString("en-IN")} SFT -> ${fullBags} Full Bag(s) of ${state.selected_material} = ₹${sideCalc.totalWithGst.toLocaleString("en-IN")} (incl. 5% GST)\n` +
-      `• Top Netting: ${topSft.toLocaleString("en-IN")} SFT (1.5mm Twisted 40mm) = ₹${topCalc.grandTotal.toLocaleString("en-IN")} (incl. ₹0.50 customisation & 5% GST)\n` +
-      `• Grand Total: ₹${grandTotal.toLocaleString("en-IN")} (Material Supply)\n` +
-      `• Delivery: To ${state.customer_location}\n\n` +
+    const reply = `Sports Turf Material Estimate:\n` +
+      `• Specification: ${calc.name}\n` +
+      `• Required Ground Area: ${reqSft} SFT\n` +
+      `• Supply Quantity: ${calc.requiredRolls} Full Roll(s) (${calc.suppliedSft} SFT)\n` +
+      `• Rate: ₹${calc.finalRatePerSft}/SFT ${calc.discountPerSft > 0 ? `(includes ₹${calc.discountPerSft}/SFT volume discount)` : ''}\n` +
+      `• Material Subtotal: ₹${calc.materialSubtotal.toLocaleString("en-IN")}\n` +
+      `• GST (5%): ₹${calc.gstAmount.toLocaleString("en-IN")}\n` +
+      `• Total Amount: ₹${calc.totalWithGst.toLocaleString("en-IN")}\n` +
+      `• Delivery: To ${state.customer_location} (freight extra at actuals)\n` +
+      `• Scope: Material supply only\n\n` +
       `Would you like to proceed with this order?`;
-
-    return {
-      replyText: reply,
-      cardType: "calculation",
-      cardData: {
-        netMath,
-        sideCalc,
-        topCalc,
-        grandTotal
-      }
-    };
-  }
-
-  // ── 7. CATEGORY: BALCONY SAFETY & PIGEON NETS ──────────────────────────────
-  if (state.active_product_category === "pigeon_safety_net") {
-    const dims = extractDimensions(userText);
-    if (dims.areaSft) {
-      if (!state.confirmed_dimensions) state.confirmed_dimensions = {};
-      state.confirmed_dimensions.areaSft = dims.areaSft;
-      state.confirmed_dimensions.length = dims.length;
-      state.confirmed_dimensions.width = dims.width;
-    }
-
-    const cityMatch = userText.match(/\b(hyderabad|bangalore|bengaluru|chennai|vijayawada|visakhapatnam|vizag|guntur|warangal)\b/i);
-    if (cityMatch) {
-      state.customer_location = cityMatch[1].charAt(0).toUpperCase() + cityMatch[1].slice(1).toLowerCase();
-    }
-
-    // Material variant selection
-    if (lower.includes("1.5mm") && (lower.includes("30mm") || lower.includes("twisted"))) state.selected_material = "1.5mm_30mm";
-    else if ((lower.includes("2.5mm") || lower.includes("2.5")) && lower.includes("40mm")) state.selected_material = "2.5mm_40mm";
-    else if (lower.includes("2.5mm") || lower.includes("2.5") || lower.includes("monkey") || lower.includes("pet")) state.selected_material = "2.5mm_45mm";
-    else if ((lower.includes("2mm") || lower.includes("2.0mm") || lower.includes("2.0")) && lower.includes("40mm")) state.selected_material = "2.0mm_40mm";
-    else if (lower.includes("2mm") || lower.includes("2.0mm") || lower.includes("2.0") || lower.includes("pigeon") || lower.includes("child")) state.selected_material = "2.0mm_45mm";
-
-    // Step 1: Missing dimensions
-    if (!state.confirmed_dimensions?.areaSft) {
-      state.stage = "REQUIREMENT_COLLECTION";
-      saveConversationState(sessionId, state);
-      return {
-        replyText: "What are your balcony dimensions (Length x Height in feet), or how many balconies do you have?"
-      };
-    }
-
-    if (!state.customer_location) {
-      state.customer_location = "Hyderabad";
-    }
-
-    const area = state.confirmed_dimensions.areaSft;
-
-    // Step 2: Quality/Thickness recommendation if not chosen
-    if (!state.selected_material) {
-      state.stage = "PRODUCT_RECOMMENDATION";
-      saveConversationState(sessionId, state);
-      return {
-        replyText: `For your ${area} SFT balcony, we offer genuine RUSSEA™ 2.0mm (standard bird & child safety with 5-year warranty) or 2.5mm braided (heavy-duty monkey & pet safety with 8-year warranty). Which quality do you prefer?`
-      };
-    }
-
-    // Step 3: Confirmation
-    const isCustomerConfirming = /^(yes|sure|proceed|ok|okay|calculate|quote|tell\s*me|avunu|sare|ha)\b/i.test(lower) || lower.includes("calculate") || lower.includes("quote");
-    if (!isCustomerConfirming && state.stage !== "REQUIREMENT_CONFIRMATION") {
-      state.stage = "REQUIREMENT_CONFIRMATION";
-      saveConversationState(sessionId, state);
-      const qualityName = state.selected_material === "2.5mm_45mm" ? "2.5mm Heavy-Duty Braided Net" : "2.0mm Braided Net";
-      return {
-        replyText: `So you require genuine RUSSEA™ ${qualityName} for ${area} SFT with complete professional installation and stainless steel fasteners. Shall I calculate the estimate?`
-      };
-    }
-
-    // Step 4: Deterministic calculation (Strictly follows 7 approved slabs & 100 SFT boundary)
-    const qualityId = (state.selected_material || "2.0mm_45mm") as InstalledNetQualityId;
-    const calc = calculateInstalledSafetyNet(qualityId, area, "standard");
-    state.stage = "ESTIMATE_PREPARED";
-    saveConversationState(sessionId, state);
-
-    const reply = `Material: Genuine RUSSEA™ ${calc.qualityName}\n` +
-      `Balcony Area: ${area} SFT\n` +
-      `Rate: ${calc.isFixedMinimumApplied ? `₹${calc.totalAmount} (Fixed Minimum under 100 SFT)` : `₹${calc.appliedRatePerSft}/SFT`}\n` +
-      `Installation: Included (SS Fasteners & drum-tight rigging)\n` +
-      `Warranty: ${calc.qualityId.includes("2.5mm") ? "8 Years Written Warranty" : "5 Years Written Warranty"}\n` +
-      `Total Estimate: ₹${calc.totalAmount.toLocaleString("en-IN")}\n\n` +
-      `Would you like to reserve a measurement and installation slot?`;
-
-    return {
-      replyText: reply,
-      cardType: "calculation",
-      cardData: calc
-    };
-  }
-
-  // ── 8. CATEGORY: INVISIBLE GRILLS (Owner Approved Schedule) ────────────────
-  if (state.active_product_category === "invisible_grill") {
-    const dims = extractDimensions(userText);
-    if (dims.areaSft) {
-      if (!state.confirmed_dimensions) state.confirmed_dimensions = {};
-      state.confirmed_dimensions.areaSft = dims.areaSft;
-      if (dims.length) state.confirmed_dimensions.length = dims.length;
-      if (dims.width) state.confirmed_dimensions.width = dims.width;
-    }
-
-    const floorNum = extractFloorNumber(userText);
-    if (floorNum) {
-      state.notes = (state.notes || "") + ` floor_${floorNum}`;
-    }
-
-    const cityMatch = userText.match(/\b(hyderabad|secunderabad|bangalore|bengaluru|chennai|vijayawada|visakhapatnam|vizag|guntur|warangal)\b/i);
-    if (cityMatch) {
-      state.customer_location = cityMatch[1].charAt(0).toUpperCase() + cityMatch[1].slice(1).toLowerCase();
-    } else if (!state.customer_location) {
-      state.customer_location = "Hyderabad";
-    }
-
-    if (!state.confirmed_dimensions?.areaSft) {
-      state.stage = "REQUIREMENT_COLLECTION";
-      saveConversationState(sessionId, state);
-      if (floorNum) {
-        return {
-          replyText: `Noted, floor ${floorNum}. What are your balcony dimensions (Length x Height in feet) so I can calculate the exact SFT?`
-        };
-      }
-      return { replyText: "What are your balcony dimensions (Length x Height in feet) or how many balconies do you have?" };
-    }
-
-    const area = state.confirmed_dimensions.areaSft;
-    const isOutsideHyd = state.customer_location.toLowerCase() !== "hyderabad" && state.customer_location.toLowerCase() !== "secunderabad";
-
-    // Calculation via owner approved schedule
-    const calc = calculateInvisibleGrills({
-      totalAreaSft: area,
-      isOutsideHyderabad: isOutsideHyd,
-      locationCity: state.customer_location,
-      wireDiameter: "2.5mm",
-      spacing: "2-inch"
-    });
-
-    state.stage = "ESTIMATE_PREPARED";
-    saveConversationState(sessionId, state);
-
-    const floorPrefix = floorNum ? `Noted, floor ${floorNum}. ` : "";
-    const reply = `${floorPrefix}AISI 316 Marine Stainless Steel Invisible Grills:\n` +
-      `Area: ${area} SFT (${calc.slabName})\n` +
-      `Rate: ${calc.isMinimumBillingApplied ? "₹10,000 fixed (under 60 SFT)" : `₹${calc.effectiveRatePerSft}/SFT`}\n` +
-      `Location: ${state.customer_location} ${isOutsideHyd ? "(+₹30/SFT outside Hyd)" : ""}\n` +
-      `Installation: Included with high-grade aluminum track fixings\n` +
-      `Warranty: 10-Year Rust Guarantee\n` +
-      `Total Estimate: ₹${calc.totalAmount.toLocaleString("en-IN")}\n\n` +
-      `Would you like to schedule a physical sample demonstration?`;
-
-    return {
-      replyText: reply,
-      cardType: "calculation",
-      cardData: calc
-    };
-  }
-
-  // ── 9. CATEGORY: CLOTH HANGERS (Approved 4-8ft Schedule) ───────────────────
-  if (state.active_product_category === "cloth_hanger") {
-    const isWallMount = lower.includes("wall");
-    const isCeilingMount = lower.includes("ceiling");
-
-    const sizeMatch = userText.match(/\b([45678])\s*(?:ft|feet|foot|')?\b/);
-    const sizeFt = sizeMatch ? (parseInt(sizeMatch[1], 10) as 4 | 5 | 6 | 7 | 8) : 6;
-
-    if (!isWallMount && !isCeilingMount) {
-      state.stage = "PRODUCT_EDUCATION";
-      saveConversationState(sessionId, state);
-      return { replyText: "Do you prefer Ceiling Mounted (pulley system) or Wall Mounted cloth drying hangers?" };
-    }
-
-    const mountingType = isWallMount ? "wall" : "ceiling";
-    const cityMatch = userText.match(/\b(hyderabad|secunderabad|bangalore|bengaluru|chennai|vijayawada|visakhapatnam|vizag|guntur|warangal)\b/i);
-    if (cityMatch) {
-      state.customer_location = cityMatch[1].charAt(0).toUpperCase() + cityMatch[1].slice(1).toLowerCase();
-    } else if (!state.customer_location) {
-      state.customer_location = "Hyderabad";
-    }
-
-    const isOutsideHyd = state.customer_location.toLowerCase() !== "hyderabad" && state.customer_location.toLowerCase() !== "secunderabad";
-
-    const calc = calculateClothHanger({
-      sizeFt,
-      mountingType,
-      quantity: 1,
-      isOutsideHyderabad: isOutsideHyd,
-      locationCity: state.customer_location
-    });
-
-    state.stage = "ESTIMATE_PREPARED";
-    saveConversationState(sessionId, state);
-
-    const reply = `SS304 6-Rod Cloth Drying Hanger (${calc.mountingLabel}):\n` +
-      `Size: ${calc.sizeFt} Feet (6 Heavy-Duty SS Pipes)\n` +
-      `Location: ${state.customer_location} ${isOutsideHyd ? "(+₹500 outside Hyd)" : ""}\n` +
-      `Installation: Complete professional installation included\n` +
-      `Warranty: 2-Year Written Guarantee\n` +
-      `Total Amount: ₹${calc.totalAmount.toLocaleString("en-IN")}\n\n` +
-      `Would you like to reserve an installation slot?`;
 
     return {
       replyText: reply,
@@ -928,6 +990,6 @@ export function handleSalesConversation(input: SalesConsultantInput): SalesConsu
   // Default Fallback
   saveConversationState(sessionId, state);
   return {
-    replyText: "Sure. Could you please share your specific dimensions or requirement so I can assist you accurately?"
+    replyText: "Sure! Could you please share your specific dimensions and site location so I can assist you accurately?"
   };
 }

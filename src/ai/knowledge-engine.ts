@@ -9,6 +9,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { db } from '../db/database.js';
+import {
+  INSTALLED_SAFETY_NET_QUALITIES,
+  BRAIDED_BAG_RATES,
+  TURF_ACCESSORIES_CATALOG
+} from '../pricing/universal-pricing-engine.js';
+import { CLOTH_HANGER_BASE_PRICES } from '../calculators/cloth-hanger-calculator.js';
 
 export interface ProductSpec {
   id: string;
@@ -77,53 +83,58 @@ export class UniversalKnowledgeEngine {
    * Initialize comprehensive baseline specifications across all 5 Pillars
    */
   private initStaticKnowledge(): void {
-    // 1. Unified Rate Cards (from service-rates.json standard)
+    // 1. Unified Rate Cards strictly referenced from Universal Pricing Engine (Single Source of Truth)
     this.unifiedRateCards = {
       safety_nets: {
-        'below_100_sft': { min: 1500, max: 1800, unit: 'flat minimum job' },
+        'below_100_sft': {
+          '1.5mm_30mm': { minCharge: INSTALLED_SAFETY_NET_QUALITIES['1.5mm_30mm'].minCharge },
+          '2.0mm_45mm': { minCharge: INSTALLED_SAFETY_NET_QUALITIES['2.0mm_45mm'].minCharge },
+          '2.0mm_40mm': { minCharge: INSTALLED_SAFETY_NET_QUALITIES['2.0mm_40mm'].minCharge },
+          '2.5mm_45mm': { minCharge: INSTALLED_SAFETY_NET_QUALITIES['2.5mm_45mm'].minCharge },
+          '2.5mm_40mm': { minCharge: INSTALLED_SAFETY_NET_QUALITIES['2.5mm_40mm'].minCharge }
+        },
         '100_250_sft': {
-          '1.5mm_30mm': { min: 16, max: 20, desc: 'RUSSEA™ Nylon Monofilament (Translucent)' },
-          '2.0mm_40mm': { min: 24, max: 28, desc: 'RUSSEA™ High-Tenacity Braided Nylon' },
-          '2.0mm_50mm': { min: 20, max: 24, desc: 'Balcony Pigeon Barrier Net' },
-          '2.5mm_40mm': { min: 26, max: 30, desc: 'Heavy Duty Child Safety Net (Impact Tested)' }
+          '1.5mm_30mm': { rate: INSTALLED_SAFETY_NET_QUALITIES['1.5mm_30mm'].slabs['100-250'], desc: '1.5mm Twisted HDPE Anti-Pigeon Net (30mm)' },
+          '2.0mm_45mm': { rate: INSTALLED_SAFETY_NET_QUALITIES['2.0mm_45mm'].slabs['100-250'], desc: '2.0mm High-Tenacity Braided RUSSEA™ Balcony Net (45mm)' },
+          '2.0mm_40mm': { rate: INSTALLED_SAFETY_NET_QUALITIES['2.0mm_40mm'].slabs['100-250'], desc: '2.0mm High-Tenacity Braided RUSSEA™ Balcony Net (40mm)' },
+          '2.5mm_45mm': { rate: INSTALLED_SAFETY_NET_QUALITIES['2.5mm_45mm'].slabs['100-250'], desc: '2.5mm Heavy-Duty Braided RUSSEA™ Balcony & Child Safety Net (45mm)' },
+          '2.5mm_40mm': { rate: INSTALLED_SAFETY_NET_QUALITIES['2.5mm_40mm'].slabs['100-250'], desc: '2.5mm Heavy-Duty Braided RUSSEA™ Balcony & Monkey Net (40mm)' }
         },
-        '250_500_sft': {
-          '1.5mm_30mm': { min: 14, max: 18, desc: 'Standard Apartment Balcony' },
-          '2.0mm_40mm': { min: 20, max: 24, desc: 'High-Rise Balcony Child & Pet Net' },
-          '2.5mm_40mm': { min: 22, max: 26, desc: 'Industrial Duct & Staircase Safety' }
+        '251_500_sft': {
+          '1.5mm_30mm': { rate: INSTALLED_SAFETY_NET_QUALITIES['1.5mm_30mm'].slabs['251-500'] },
+          '2.0mm_45mm': { rate: INSTALLED_SAFETY_NET_QUALITIES['2.0mm_45mm'].slabs['251-500'] },
+          '2.0mm_40mm': { rate: INSTALLED_SAFETY_NET_QUALITIES['2.0mm_40mm'].slabs['251-500'] },
+          '2.5mm_45mm': { rate: INSTALLED_SAFETY_NET_QUALITIES['2.5mm_45mm'].slabs['251-500'] },
+          '2.5mm_40mm': { rate: INSTALLED_SAFETY_NET_QUALITIES['2.5mm_40mm'].slabs['251-500'] }
         },
-        '500_1000_sft': {
-          '1.5mm_30mm': { min: 12, max: 16, desc: 'Multiple Balconies / Duplex' },
-          '2.0mm_40mm': { min: 18, max: 22, desc: 'Apartment Society Group Booking' }
-        },
-        'above_1000_sft': {
-          'bulk_rate': { min: 10, max: 18, desc: 'Commercial Complex / Society Gated Community' }
+        '501_2000_sft': {
+          '1.5mm_30mm': { rate: INSTALLED_SAFETY_NET_QUALITIES['1.5mm_30mm'].slabs['501-2000'] },
+          '2.0mm_45mm': { rate: INSTALLED_SAFETY_NET_QUALITIES['2.0mm_45mm'].slabs['501-2000'] },
+          '2.0mm_40mm': { rate: INSTALLED_SAFETY_NET_QUALITIES['2.0mm_40mm'].slabs['501-2000'] },
+          '2.5mm_45mm': { rate: INSTALLED_SAFETY_NET_QUALITIES['2.5mm_45mm'].slabs['501-2000'] },
+          '2.5mm_40mm': { rate: INSTALLED_SAFETY_NET_QUALITIES['2.5mm_40mm'].slabs['501-2000'] }
         }
       },
-      cricket_nets: {
-        '1000_5000_sft': { min: 13, max: 18, desc: 'Backyard & School Practice Pitch' },
-        '5000_10000_sft': { min: 12, max: 16, desc: 'Commercial Box Cricket Ground' },
-        'above_10000_sft': { min: 8, max: 12, desc: 'Full Sports Arena / Multi-Court Setup' }
-      },
       invisible_grills: {
-        '1.5mm_cable': { '2_inch_gap': { min: 130, max: 150 }, '3_inch_gap': { min: 120, max: 140 } },
-        '2.0mm_cable': { '2_inch_gap': { min: 140, max: 160 }, '3_inch_gap': { min: 130, max: 150 } },
-        '2.5mm_cable': { '2_inch_gap': { min: 150, max: 170 }, '3_inch_gap': { min: 140, max: 160 } },
-        '3.0mm_cable': { '2_inch_gap': { min: 160, max: 180 }, '3_inch_gap': { min: 150, max: 170 } }
+        'below_60_sft': { hydFixed: 10000, outsideHydSurchargePerSft: 30 },
+        '60_100_sft': { hydRate: 160, outsideHydRate: 190 },
+        '101_200_sft': { hydRate: 140, outsideHydRate: 170 },
+        '201_300_sft': { hydRate: 130, outsideHydRate: 160 },
+        '301_500_sft': { hydRate: 120, outsideHydRate: 150 },
+        '501_1000_sft': { hydRate: 110, outsideHydRate: 140 },
+        'above_1000_sft': { hydRate: 100, outsideHydRate: 130 }
       },
       cloth_drying_hangers: {
-        'ceiling_pulley_4_pipe': { min: 2000, max: 2500 },
-        'ceiling_pulley_5_pipe': { min: 2250, max: 2750 },
-        'ceiling_pulley_6_pipe': { min: 2500, max: 3000, desc: 'Most popular residential 6-pipe x 6ft' },
-        'ceiling_pulley_7_pipe': { min: 2750, max: 3250 },
-        'ceiling_pulley_8_pipe': { min: 3000, max: 3500 },
-        'wall_mounted_foldable_6_pipe': { min: 3000, max: 3500 }
+        base_prices: CLOTH_HANGER_BASE_PRICES,
+        outside_hyd_surcharge_per_unit: 500
       },
+      cricket_braided_bags: BRAIDED_BAG_RATES,
       netsocean_wholesale_bags: {
         'hdpe_braided_45mm_100x33ft': { ratePerSft: 8.0, bagTotal: 26400, desc: '1 Bag = 3,300 SFT ready to install' },
         'hdpe_braided_40mm_100x33ft': { ratePerSft: 8.5, bagTotal: 28050, desc: '1 Bag = 3,300 SFT denser mesh' },
         'twisted_natural_green_35mm': { ratePerSft: 6.0, bagTotal: 19800, desc: '1 Bag = 3,300 SFT roof netting' }
       },
+      turf_accessories: TURF_ACCESSORIES_CATALOG,
       turnkey_box_cricket: {
         'standard_100x50x25': {
           groundArea: 5000,

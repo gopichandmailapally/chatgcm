@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import fs from 'node:fs';
 
-const DB_DIR = process.env.DB_DIR || '/var/www/chatgcm.in/data';
+const DB_DIR = process.env.DB_DIR || (fs.existsSync('/var/www/chatgcm.in/data') ? '/var/www/chatgcm.in/data' : path.join(process.cwd(), 'data'));
 if (!fs.existsSync(DB_DIR)) {
   fs.mkdirSync(DB_DIR, { recursive: true });
 }
@@ -140,6 +140,7 @@ export function initDatabase() {
       website_id TEXT NOT NULL,
       channel TEXT NOT NULL DEFAULT 'web_chat', -- 'web_chat', 'whatsapp', 'phone_call'
       session_id TEXT NOT NULL,
+      state TEXT NOT NULL DEFAULT '{}',
       messages TEXT NOT NULL DEFAULT '[]', -- JSON array of {role, content, timestamp, tool_calls}
       summary TEXT,
       human_takeover INTEGER DEFAULT 0,
@@ -331,6 +332,62 @@ export function initDatabase() {
       enable_human_escalation INTEGER DEFAULT 1,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- 21. Tenant-Specific Pricing Overrides
+    CREATE TABLE IF NOT EXISTS pricing_overrides (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
+      product_id TEXT NOT NULL,
+      override_rate REAL NOT NULL,
+      gst_pct REAL DEFAULT NULL,
+      effective_from DATE DEFAULT CURRENT_DATE,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_pricing_overrides_tenant ON pricing_overrides(tenant_id);
+
+    -- 22. Historical Pricing Audit Log
+    CREATE TABLE IF NOT EXISTS price_history (
+      id TEXT PRIMARY KEY,
+      product_id TEXT NOT NULL,
+      tenant_id TEXT DEFAULT 'ALL',
+      field_changed TEXT NOT NULL,
+      old_value TEXT,
+      new_value TEXT,
+      changed_by TEXT NOT NULL,
+      effective_from DATE DEFAULT CURRENT_DATE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_price_history_prod ON price_history(product_id);
+    CREATE INDEX IF NOT EXISTS idx_price_history_created ON price_history(created_at DESC);
+
+    -- 23. Administrative & RBAC Users Table
+    CREATE TABLE IF NOT EXISTS admin_users (
+      id TEXT PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      salt TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'SALES_AGENT', -- 'SUPER_ADMIN', 'TENANT_ADMIN', 'SALES_MANAGER', 'SALES_AGENT', 'AUDITOR'
+      tenant_id TEXT, -- NULL for SUPER_ADMIN, otherwise restricted to specific website/tenant
+      display_name TEXT NOT NULL,
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_admin_users_username ON admin_users(username);
+
+    -- 24. Administrative API Tokens Table
+    CREATE TABLE IF NOT EXISTS admin_api_tokens (
+      id TEXT PRIMARY KEY,
+      token_hash TEXT UNIQUE NOT NULL,
+      user_id TEXT,
+      role TEXT NOT NULL DEFAULT 'SUPER_ADMIN',
+      tenant_id TEXT,
+      name TEXT NOT NULL,
+      expires_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_admin_api_tokens_hash ON admin_api_tokens(token_hash);
   `);
 
   // Safe column migrations for existing databases
@@ -348,6 +405,7 @@ export function initDatabase() {
     { table: 'products', col: 'supply_only', def: 'INTEGER DEFAULT 0' },
     { table: 'products', col: 'turnkey_project', def: 'INTEGER DEFAULT 0' },
     // Conversations Shared Inbox
+    { table: 'conversations', col: 'state', def: 'TEXT DEFAULT "{}"' },
     { table: 'conversations', col: 'internal_notes', def: 'TEXT DEFAULT "[]"' },
     { table: 'conversations', col: 'human_takeover', def: 'INTEGER DEFAULT 0' },
 
@@ -359,6 +417,7 @@ export function initDatabase() {
     { table: 'conversations', col: 'scheduled_callback_at', def: 'DATETIME' },
     { table: 'conversations', col: 'opt_out', def: 'INTEGER DEFAULT 0' },
     // Quotations
+    { table: 'quotations', col: 'updated_at', def: 'DATETIME DEFAULT CURRENT_TIMESTAMP' },
     { table: 'quotations', col: 'doc_id', def: 'TEXT' },
     { table: 'quotations', col: 'view_url', def: 'TEXT' },
     { table: 'quotations', col: 'pdf_url', def: 'TEXT' },
