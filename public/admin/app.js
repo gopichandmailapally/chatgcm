@@ -98,10 +98,32 @@ document.addEventListener('DOMContentLoaded', () => {
   startAutoRefresh();
   initSSEStream();
 
-  // Listen for ESC key to close any modal
+  // Initial tab setup: ensure global stats are appropriately hidden for full-screen operational tools
+  const globalStats = document.getElementById('global-stats-grid');
+  if (globalStats && (currentTab === 'whatsapp-hub' || currentTab === 'meta-connection' || currentTab === 'catalog-syncer')) {
+    globalStats.style.display = 'none';
+  }
+
+  // Smart Chat Scroll Listener: show floating scroll button when scrolled up
+  const waStream = document.getElementById('wa-messages-stream');
+  if (waStream) {
+    waStream.addEventListener('scroll', () => {
+      const scrollBtn = document.getElementById('wa-scroll-bottom-btn');
+      if (!scrollBtn) return;
+      const distanceFromBottom = waStream.scrollHeight - waStream.scrollTop - waStream.clientHeight;
+      if (distanceFromBottom > 140) {
+        scrollBtn.style.display = 'inline-flex';
+      } else {
+        scrollBtn.style.display = 'none';
+      }
+    });
+  }
+
+  // Listen for ESC key to close any modal or mobile drawer
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       document.querySelectorAll('.modal-overlay').forEach(m => m.classList.add('hidden'));
+      closeMobileSidebar();
     }
   });
 });
@@ -181,6 +203,19 @@ function switchTab(tabId) {
     document.getElementById('tab-subheading').textContent = headers[tabId][1];
   }
 
+  // Global Stats visibility toggle: hide on full-height operational tools to eliminate vertical crowding
+  const globalStats = document.getElementById('global-stats-grid');
+  if (globalStats) {
+    if (tabId === 'whatsapp-hub' || tabId === 'meta-connection' || tabId === 'catalog-syncer') {
+      globalStats.style.display = 'none';
+    } else {
+      globalStats.style.display = 'grid';
+    }
+  }
+
+  // Auto-close mobile sidebar drawer when navigating
+  closeMobileSidebar();
+
   // Tab-specific initializations
   if (tabId === 'whatsapp-hub') {
     loadWhatsAppConversations();
@@ -198,6 +233,8 @@ function switchTab(tabId) {
     loadApprovals();
   } else if (tabId === 'agent-audit') {
     loadAgentPerformance();
+  } else if (tabId === 'catalog-syncer') {
+    loadCatalogItems();
   }
 }
 
@@ -436,6 +473,34 @@ async function selectConversation(phone) {
     brandEl.style.display = 'inline-block';
     brandEl.textContent = thread?.websiteDomain || thread?.websiteName || 'gcmsafetynets.in';
   }
+
+  // Populate Customer Overview Panel (Region 3)
+  const custPanelName = document.getElementById('cust-panel-name');
+  const custPanelPhone = document.getElementById('cust-panel-phone');
+  const custPanelWaLink = document.getElementById('cust-panel-wa-link');
+  const custPanelWebsite = document.getElementById('cust-panel-website');
+  const custPanelStage = document.getElementById('cust-panel-stage');
+  const custPanelAgent = document.getElementById('cust-panel-agent');
+  const custPanelProduct = document.getElementById('cust-panel-product');
+  const custPanelDimensions = document.getElementById('cust-panel-dimensions');
+  const custPanelPrice = document.getElementById('cust-panel-price');
+
+  if (custPanelName) custPanelName.textContent = displayName;
+  if (custPanelPhone) custPanelPhone.textContent = `+${cleanPhone}`;
+  if (custPanelWaLink) custPanelWaLink.href = `https://wa.me/${cleanPhone}`;
+  if (custPanelWebsite) custPanelWebsite.textContent = thread?.websiteDomain || thread?.websiteName || 'gcmsafetynets.in';
+  if (custPanelStage) custPanelStage.textContent = (thread?.pipeline_stage || 'New Lead').replace('_', ' ');
+  if (custPanelAgent) custPanelAgent.textContent = thread?.assigned_agent || thread?.assignedAgent || 'Gopichand (Admin)';
+  if (custPanelProduct) custPanelProduct.textContent = thread?.serviceName || activeChatLead?.requirement || 'Balcony Safety Nets';
+  if (custPanelDimensions) custPanelDimensions.textContent = thread?.dimensions || activeChatLead?.dimensions || 'Pending measurement';
+  if (custPanelPrice) custPanelPrice.textContent = thread?.total_amount ? ('₹' + Number(thread.total_amount).toLocaleString('en-IN')) : '₹--';
+
+  // Mobile layout switch to chat view
+  const hubLayout = document.querySelector('.wa-hub-layout');
+  if (hubLayout) hubLayout.classList.add('mobile-chat-open');
+  const mobileBackBtn = document.getElementById('wa-mobile-back-btn');
+  if (mobileBackBtn) mobileBackBtn.style.display = 'inline-flex';
+
   loadInternalNotes(cleanPhone);
 
   // Show action bar, quick chips & composer
@@ -446,24 +511,51 @@ async function selectConversation(phone) {
   // Update AI Autopilot Button state
   updateAutoPilotBtn(thread?.humanTakeover || thread?.human_takeover);
 
-  // Load message stream
-  await loadActiveChatMessages(cleanPhone, true);
+  // Load message stream with forced scroll to bottom on thread selection
+  loadActiveChatMessages(cleanPhone, true);
 }
 
-async function loadActiveChatMessages(phone, shouldScroll = true) {
+async function loadActiveChatMessages(phone, forceScroll = false) {
   const container = document.getElementById('wa-messages-stream');
   try {
     const res = await fetch(`/api/whatsapp/conversations/${phone}`);
     const data = await res.json();
     if (data.success && Array.isArray(data.messages)) {
       activeChatLead = data.lead || null;
+
+      // Smart scroll detection: Check if user was already near bottom before rendering new messages
+      const isNearBottom = container ? (container.scrollHeight - container.scrollTop - container.clientHeight <= 140) : true;
+
       renderMessages(data.messages);
-      if (shouldScroll) {
+
+      if (forceScroll || isNearBottom) {
         setTimeout(scrollToBottom, 50);
+      } else {
+        // User was reading older messages: show floating "Scroll to latest" button instead of jumping
+        const scrollBtn = document.getElementById('wa-scroll-bottom-btn');
+        if (scrollBtn) scrollBtn.style.display = 'inline-flex';
       }
     }
   } catch (err) {
     console.error('Failed to load active chat messages:', err);
+  }
+}
+
+function scrollToBottom() {
+  const container = document.getElementById('wa-messages-stream');
+  if (container) {
+    container.scrollTop = container.scrollHeight;
+    const scrollBtn = document.getElementById('wa-scroll-bottom-btn');
+    if (scrollBtn) scrollBtn.style.display = 'none';
+  }
+}
+
+function scrollToBottomSmooth() {
+  const container = document.getElementById('wa-messages-stream');
+  if (container) {
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    const scrollBtn = document.getElementById('wa-scroll-bottom-btn');
+    if (scrollBtn) scrollBtn.style.display = 'none';
   }
 }
 
@@ -525,13 +617,6 @@ function renderMessages(messages) {
       </div>
     `;
   }).join('');
-}
-
-function scrollToBottom() {
-  const container = document.getElementById('wa-messages-stream');
-  if (container) {
-    container.scrollTop = container.scrollHeight;
-  }
 }
 
 async function sendManualWhatsAppReply() {
@@ -2207,7 +2292,9 @@ function toggleInternalNotesDrawer() {
 async function loadInternalNotes(phone) {
   const listEl = document.getElementById('active-internal-notes-list');
   const badgeEl = document.getElementById('active-notes-count');
-  if (!listEl) return;
+  const panelStream = document.getElementById('cust-panel-notes-stream');
+  const panelBadge = document.getElementById('cust-panel-notes-badge');
+  if (!listEl && !panelStream) return;
 
   try {
     const res = await fetch(`/api/whatsapp/conversations/${phone}/internal-notes`);
@@ -2218,18 +2305,30 @@ async function loadInternalNotes(phone) {
         badgeEl.textContent = notes.length;
         badgeEl.style.display = notes.length > 0 ? 'inline-block' : 'none';
       }
+      if (panelBadge) {
+        panelBadge.textContent = notes.length;
+      }
+
+      const emptyDrawerHtml = `
+        <div style="text-align:center; padding:24px; color:var(--text-muted); font-size:12px;">
+          <i class="fas fa-lock" style="font-size:24px; color:#f59e0b; margin-bottom:8px; display:block;"></i>
+          No private notes yet. Write handover instructions or internal customer preferences below.
+        </div>
+      `;
+
+      const emptyPanelHtml = `
+        <div style="font-size:11.5px; color:var(--text-muted); text-align:center; padding:12px 0;">
+          No private notes yet. Add one below.
+        </div>
+      `;
 
       if (notes.length === 0) {
-        listEl.innerHTML = `
-          <div style="text-align:center; padding:24px; color:var(--text-muted); font-size:12px;">
-            <i class="fas fa-lock" style="font-size:24px; color:#f59e0b; margin-bottom:8px; display:block;"></i>
-            No private notes yet. Write handover instructions or internal customer preferences below.
-          </div>
-        `;
+        if (listEl) listEl.innerHTML = emptyDrawerHtml;
+        if (panelStream) panelStream.innerHTML = emptyPanelHtml;
         return;
       }
 
-      listEl.innerHTML = notes.map(n => `
+      const notesHtml = notes.map(n => `
         <div class="internal-note-card">
           <div class="internal-note-meta">
             <span style="font-weight:700; color:#f59e0b;"><i class="fas fa-user-shield"></i> ${escapeHtml(n.author || 'Team Member')}</span>
@@ -2238,7 +2337,15 @@ async function loadInternalNotes(phone) {
           <div class="internal-note-text">${escapeHtml(n.note || '')}</div>
         </div>
       `).join('');
-      listEl.scrollTop = listEl.scrollHeight;
+
+      if (listEl) {
+        listEl.innerHTML = notesHtml;
+        listEl.scrollTop = listEl.scrollHeight;
+      }
+      if (panelStream) {
+        panelStream.innerHTML = notesHtml;
+        panelStream.scrollTop = panelStream.scrollHeight;
+      }
     }
   } catch (err) {
     console.error('Failed to load internal notes:', err);
@@ -2272,6 +2379,76 @@ async function submitInternalTeamNote() {
     }
   } catch (err) {
     console.error('Failed to save internal note:', err);
+  }
+}
+
+async function submitCustomerPanelNote() {
+  if (!activeChatPhone) {
+    alert('Please select an active conversation first.');
+    return;
+  }
+
+  const inputEl = document.getElementById('cust-panel-note-input');
+  const note = inputEl ? inputEl.value.trim() : '';
+  if (!note) return;
+
+  try {
+    const res = await fetch(`/api/whatsapp/conversations/${activeChatPhone}/internal-notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        note,
+        author: 'Gopichand (Master Admin)'
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      inputEl.value = '';
+      loadInternalNotes(activeChatPhone);
+      showToastNotification('Private note added to customer profile.');
+    }
+  } catch (err) {
+    console.error('Failed to save customer panel note:', err);
+  }
+}
+
+function toggleCustomerPanel() {
+  const hub = document.querySelector('.wa-hub-layout');
+  if (hub) {
+    hub.classList.toggle('details-collapsed');
+  }
+}
+
+function toggleMobileSidebar() {
+  const sidebar = document.getElementById('app-sidebar') || document.querySelector('.sidebar');
+  if (sidebar) {
+    sidebar.classList.toggle('mobile-open');
+  }
+}
+
+function closeMobileSidebar() {
+  const sidebar = document.getElementById('app-sidebar') || document.querySelector('.sidebar');
+  if (sidebar) {
+    sidebar.classList.remove('mobile-open');
+  }
+}
+
+function closeMobileChat() {
+  const hub = document.querySelector('.wa-hub-layout');
+  if (hub) hub.classList.remove('mobile-chat-open');
+  const mobileBackBtn = document.getElementById('wa-mobile-back-btn');
+  if (mobileBackBtn) mobileBackBtn.style.display = 'none';
+}
+
+function toggleTokenMask(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  if (input.type === 'password') {
+    input.type = 'text';
+    if (btn) btn.innerHTML = '<i class="fas fa-eye-slash"></i>';
+  } else {
+    input.type = 'password';
+    if (btn) btn.innerHTML = '<i class="fas fa-eye"></i>';
   }
 }
 
@@ -2587,11 +2764,24 @@ async function moveKanbanLeadStage(leadId, targetStage) {
 
 let catalogItemsCache = [];
 let selectedCatalogCategory = 'ALL';
+let catalogSearchQuery = '';
 
 async function loadCatalogItems() {
   const tbody = document.getElementById('catalog-table-tbody');
   const countAll = document.getElementById('cat-count-all');
+  const inStockBadge = document.getElementById('cat-in-stock-val');
+  const warrantyBadge = document.getElementById('cat-warranty-val');
   if (!tbody) return;
+
+  // Render animated loading skeleton while fetching
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="8" style="text-align:center; padding:36px; color:var(--text-secondary);">
+        <i class="fas fa-spinner fa-spin" style="font-size:22px; color:var(--accent-indigo); margin-bottom:10px; display:block;"></i>
+        Fetching live inventory from database...
+      </td>
+    </tr>
+  `;
 
   try {
     const res = await fetch('/api/admin/catalog/items');
@@ -2600,10 +2790,32 @@ async function loadCatalogItems() {
     if (data.success) {
       catalogItemsCache = data.items || [];
       if (countAll) countAll.textContent = catalogItemsCache.length;
+
+      // Compute inventory counts
+      const inStockCount = catalogItemsCache.filter(item => item.stock_status !== 'OUT_OF_STOCK').length;
+      const warrantyCount = catalogItemsCache.filter(item => Number(item.warranty_years || 0) > 0).length;
+      if (inStockBadge) inStockBadge.textContent = inStockCount;
+      if (warrantyBadge) warrantyBadge.textContent = warrantyCount;
+
       renderCatalogTable();
+    } else {
+      throw new Error(data.error || 'Server returned unsuccessful response');
     }
   } catch (err) {
     console.error('Failed to load catalog items:', err);
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align:center; padding:36px; color:var(--text-secondary);">
+          <i class="fas fa-exclamation-triangle" style="font-size:24px; color:#ef4444; margin-bottom:10px; display:block;"></i>
+          Unable to connect to Catalog API (${escapeHtml(err.message)}).
+          <div style="margin-top:12px;">
+            <button class="btn btn-outline btn-sm" onclick="loadCatalogItems()">
+              <i class="fas fa-sync-alt"></i> Retry Connection
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
   }
 }
 
@@ -2615,17 +2827,37 @@ function filterCatalogCategory(category) {
   renderCatalogTable();
 }
 
+function filterCatalogSearch(query) {
+  catalogSearchQuery = (query || '').toLowerCase().trim();
+  renderCatalogTable();
+}
+
 function renderCatalogTable() {
   const tbody = document.getElementById('catalog-table-tbody');
   if (!tbody) return;
 
   const filtered = catalogItemsCache.filter(item => {
-    if (selectedCatalogCategory === 'ALL') return true;
-    return (item.category || '').toUpperCase().includes(selectedCatalogCategory);
+    const matchesCategory = selectedCatalogCategory === 'ALL' || (item.category || '').toUpperCase().includes(selectedCatalogCategory);
+    if (!matchesCategory) return false;
+
+    if (!catalogSearchQuery) return true;
+    const nameMatch = (item.product_name || '').toLowerCase().includes(catalogSearchQuery);
+    const skuMatch = (item.sku || item.id || '').toLowerCase().includes(catalogSearchQuery);
+    const catMatch = (item.category || '').toLowerCase().includes(catalogSearchQuery);
+    const brandMatch = (item.brand || '').toLowerCase().includes(catalogSearchQuery);
+    const specMatch = (item.specification || '').toLowerCase().includes(catalogSearchQuery);
+    return nameMatch || skuMatch || catMatch || brandMatch || specMatch;
   });
 
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:var(--text-muted);">No products found in this category.</td></tr>`;
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align:center; padding:36px; color:var(--text-muted);">
+          <i class="fas fa-box-open" style="font-size:24px; color:var(--text-muted); margin-bottom:8px; display:block;"></i>
+          No products found matching the selected filter or search term.
+        </td>
+      </tr>
+    `;
     return;
   }
 
@@ -2882,3 +3114,12 @@ window.dispatchCatalogProductToActiveChat = dispatchCatalogProductToActiveChat;
 
 window.openWhatsAppChat = openWhatsAppChatFor;
 window.renderKanbanBoard = loadKanbanBoard;
+
+window.toggleCustomerPanel = toggleCustomerPanel;
+window.toggleMobileSidebar = toggleMobileSidebar;
+window.closeMobileSidebar = closeMobileSidebar;
+window.closeMobileChat = closeMobileChat;
+window.toggleTokenMask = toggleTokenMask;
+window.submitCustomerPanelNote = submitCustomerPanelNote;
+window.filterCatalogSearch = filterCatalogSearch;
+window.scrollToBottomSmooth = scrollToBottomSmooth;

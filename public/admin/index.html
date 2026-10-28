@@ -16,7 +16,10 @@
 <body>
   <div class="app-layout">
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="app-sidebar">
+      <button class="sidebar-close-btn" onclick="toggleMobileSidebar()" title="Close Navigation">
+        <i class="fas fa-times"></i>
+      </button>
       <div class="brand">
         <div class="brand-icon">
           <i class="fas fa-shield-halved" style="color:var(--accent-cyan);"></i>
@@ -123,6 +126,9 @@
 
       <!-- Top Executive Header -->
       <header class="top-bar">
+        <button class="mobile-menu-toggle" id="mobile-menu-toggle" onclick="toggleMobileSidebar()" title="Toggle Navigation Menu">
+          <i class="fas fa-bars"></i>
+        </button>
         <div class="page-title">
           <h1 id="tab-heading">Live WhatsApp Conversation Hub</h1>
           <p id="tab-subheading">Autonomous AI customer engagement on +91 99123 99334 with Multi-Brand Isolation & Unified Capability Routing</p>
@@ -194,7 +200,7 @@
       <!-- Main Content Views -->
       <div class="content-wrapper">
         <!-- Live Metric Stats -->
-        <div class="stats-grid">
+        <div class="stats-grid" id="global-stats-grid">
           <div class="stat-card" style="--stat-color:var(--accent-indigo);">
             <div class="stat-icon" style="color:var(--accent-indigo);">
               <i class="fas fa-users-viewfinder"></i>
@@ -279,6 +285,9 @@
             <div class="wa-chat-window">
               <div class="wa-chat-header" id="wa-chat-header">
                 <div class="wa-chat-user">
+                  <button class="wa-back-btn" id="wa-mobile-back-btn" onclick="closeMobileChat()" title="Back to chats" style="display:none;">
+                    <i class="fas fa-arrow-left"></i>
+                  </button>
                   <div class="wa-avatar-wrap">
                     <div class="wa-avatar" id="active-chat-avatar">G</div>
                     <span class="avatar-live-indicator"></span>
@@ -332,6 +341,11 @@
 
                   <!-- Quick Action Tools -->
                   <div class="chat-tools-group">
+                    <button class="chat-tool-btn amber" id="btn-toggle-customer-panel" onclick="toggleCustomerPanel()" title="Customer Details & Notes Panel">
+                      <i class="fas fa-id-card"></i>
+                      <span>Details</span>
+                    </button>
+
                     <button class="chat-tool-btn amber" id="btn-toggle-notes" onclick="toggleInternalNotesDrawer()" title="Internal Team Notes (Private)">
                       <i class="fas fa-lock"></i>
                       <span>Notes</span>
@@ -369,6 +383,11 @@
                 </div>
               </div>
 
+              <!-- Floating Scroll-to-Bottom Button -->
+              <button id="wa-scroll-bottom-btn" class="wa-scroll-bottom-btn" onclick="scrollToBottomSmooth()" style="display:none;" title="Scroll to latest messages">
+                <i class="fas fa-arrow-down"></i> Scroll to latest
+              </button>
+
               <!-- Quick Action Chips -->
               <div class="wa-quick-chips" id="wa-quick-chips" style="display:none;">
                 <button class="wa-chip" onclick="applyMacro('quote')">
@@ -401,7 +420,8 @@
                   <i class="fas fa-paper-plane"></i>
                 </button>
               </div>
-                          <!-- Internal Team Private Notes Drawer (Amber Themed, 100% Isolated from Customer) -->
+
+              <!-- Internal Team Private Notes Drawer (Amber Themed, 100% Isolated from Customer) -->
               <div class="wa-internal-notes-drawer" id="wa-internal-notes-drawer" style="display:none;">
                 <div class="notes-drawer-header">
                   <div style="display:flex; align-items:center; gap:8px;">
@@ -428,6 +448,99 @@
                   </div>
                 </div>
               </div>
+            </div>
+
+            <!-- Region 3: Customer Details, Quotes & Private Notes Panel -->
+            <aside class="wa-customer-panel" id="wa-customer-panel">
+              <div class="wa-customer-panel-header">
+                <div class="wa-customer-panel-title">
+                  <i class="fas fa-id-card" style="color:var(--accent-indigo);"></i>
+                  <h4>Customer Overview</h4>
+                </div>
+                <button class="btn-xs btn-outline" onclick="toggleCustomerPanel()" title="Close Details Panel">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+
+              <div class="wa-customer-panel-body">
+                <!-- Customer Profile Card -->
+                <div class="customer-overview-card">
+                  <div class="customer-meta-row">
+                    <span class="customer-meta-label">Customer Name</span>
+                    <strong class="customer-meta-val" id="cust-panel-name">Select conversation</strong>
+                  </div>
+                  <div class="customer-meta-row">
+                    <span class="customer-meta-label">WhatsApp Contact</span>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <strong class="customer-meta-val" id="cust-panel-phone">+91 ----------</strong>
+                      <a id="cust-panel-wa-link" href="#" target="_blank" class="btn-xs btn-outline" title="Open in WhatsApp Web" style="padding:2px 6px;">
+                        <i class="fab fa-whatsapp" style="color:var(--accent-green);"></i>
+                      </a>
+                    </div>
+                  </div>
+                  <div class="customer-meta-row">
+                    <span class="customer-meta-label">Origin Website</span>
+                    <span class="brand-pill-mini" id="cust-panel-website">gcmsafetynets.in</span>
+                  </div>
+                  <div class="customer-meta-row">
+                    <span class="customer-meta-label">Pipeline Stage</span>
+                    <span class="badge badge-green" id="cust-panel-stage">New Lead</span>
+                  </div>
+                  <div class="customer-meta-row">
+                    <span class="customer-meta-label">Assigned Staff</span>
+                    <span class="customer-meta-val" id="cust-panel-agent">Gopichand (Admin)</span>
+                  </div>
+                </div>
+
+                <!-- Requirement & Estimation Card -->
+                <div class="customer-overview-card">
+                  <div class="card-mini-heading">
+                    <i class="fas fa-calculator" style="color:var(--accent-amber);"></i>
+                    <span>Requirement & Estimate</span>
+                  </div>
+                  <div class="customer-meta-row">
+                    <span class="customer-meta-label">Product / Service</span>
+                    <strong class="customer-meta-val" id="cust-panel-product">Balcony Safety Nets</strong>
+                  </div>
+                  <div class="customer-meta-row">
+                    <span class="customer-meta-label">Dimensions / Area</span>
+                    <span class="customer-meta-val" id="cust-panel-dimensions">Pending Customer Input</span>
+                  </div>
+                  <div class="customer-meta-row">
+                    <span class="customer-meta-label">Estimated Price</span>
+                    <span class="customer-price-val" id="cust-panel-price">₹--</span>
+                  </div>
+                  <div style="margin-top:10px; display:flex; gap:6px;">
+                    <button class="btn btn-primary btn-xs" style="flex:1;" onclick="quickSendQuoteToActiveChat()">
+                      <i class="fas fa-file-invoice"></i> Dispatch Quote
+                    </button>
+                    <button class="btn btn-outline btn-xs" onclick="openQuotationModal()">
+                      <i class="fas fa-pencil-alt"></i> Edit
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Integrated Private Team Notes Section -->
+                <div class="customer-overview-card notes-card">
+                  <div class="card-mini-heading">
+                    <i class="fas fa-lock" style="color:var(--accent-amber);"></i>
+                    <span>Confidential Team Notes</span>
+                    <span class="badge badge-amber" id="cust-panel-notes-badge" style="margin-left:auto; font-size:10px;">0</span>
+                  </div>
+                  <div class="panel-notes-stream" id="cust-panel-notes-stream">
+                    <div style="font-size:11.5px; color:var(--text-muted); text-align:center; padding:12px 0;">
+                      No private notes yet.
+                    </div>
+                  </div>
+                  <div class="panel-note-composer">
+                    <textarea id="cust-panel-note-input" class="form-control" rows="2" placeholder="Write internal note (handover, discount, site visit)..." style="font-size:11.5px; resize:none;"></textarea>
+                    <button class="btn btn-amber btn-xs" style="width:100%; margin-top:6px;" onclick="submitCustomerPanelNote()">
+                      <i class="fas fa-save"></i> Save Team Note
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </aside>
             </div>
           </div>
         </div>
@@ -760,8 +873,8 @@
              TAB: META CLOUD API CONNECTION MODULE
              ==================================================================== -->
         <div id="tab-meta-connection" class="tab-panel">
-          <!-- Top Infrastructure Banner -->
-          <div class="stats-grid" style="margin-bottom:20px;">
+          <!-- Top Infrastructure Status Cards (Un-squeezed Responsive Grid) -->
+          <div class="meta-status-cards-grid" style="margin-bottom:20px;">
             <div class="stat-card" style="border-left: 3px solid #10b981;">
               <div class="stat-header">
                 <span class="stat-label">Active Meta Business Number</span>
@@ -832,8 +945,11 @@
                   <span style="color:#10b981;">✓ Matching Server Hash</span>
                 </label>
                 <div style="display:flex; gap:8px;">
-                  <input type="text" id="meta-verify-token" class="form-control" value="gcm_whatsapp_verify_2026" readonly style="font-family:monospace; background:rgba(0,0,0,0.3); font-size:12.5px;">
-                  <button class="btn btn-outline btn-sm" onclick="copyMetaText('gcm_whatsapp_verify_2026', this)">
+                  <input type="password" id="meta-verify-token" class="form-control" value="gcm_whatsapp_verify_2026" readonly style="font-family:monospace; background:rgba(0,0,0,0.3); font-size:12.5px; letter-spacing: 2px;">
+                  <button class="btn btn-outline btn-sm" type="button" onclick="toggleTokenMask('meta-verify-token', this)" title="Show/Hide Token">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button class="btn btn-outline btn-sm" onclick="copyMetaText(document.getElementById('meta-verify-token').value, this)">
                     <i class="fas fa-copy"></i> Copy
                   </button>
                 </div>
@@ -1112,6 +1228,18 @@
             <button class="brand-pill" onclick="filterCatalogCategory('ACCESSORIES')">
               <span class="brand-dot" style="background:#ec4899;"></span> Hardware & Accessories
             </button>
+          </div>
+
+          <!-- Catalog Toolbar with Live Search & Inventory Counts -->
+          <div class="catalog-toolbar" style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px; background:var(--bg-card); padding:10px 14px; border-radius:var(--radius-md); border:1px solid var(--border-subtle);">
+            <div style="position:relative; flex:1; max-width:400px; min-width:240px;">
+              <i class="fas fa-search" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text-muted); font-size:12px;"></i>
+              <input type="text" id="catalog-search-input" class="form-control" placeholder="Search by product name, SKU, or specs..." oninput="filterCatalogSearch(this.value)" style="padding-left:34px; font-size:12px; height:36px; border-radius:6px; background:rgba(0,0,0,0.25);">
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <span class="badge badge-green" id="cat-in-stock-badge" style="font-size:11px; padding:4px 8px;"><i class="fas fa-check-circle"></i> In Stock: <strong id="cat-in-stock-val">0</strong></span>
+              <span class="badge badge-amber" id="cat-warranty-badge" style="font-size:11px; padding:4px 8px;"><i class="fas fa-shield-alt"></i> Warranty Backed: <strong id="cat-warranty-val">0</strong></span>
+            </div>
           </div>
 
           <!-- Product Inventory Table -->
