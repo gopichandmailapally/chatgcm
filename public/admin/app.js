@@ -4,6 +4,48 @@
  * Official Meta Cloud API: +91 99123 99334
  */
 
+// ── Global Authenticated Fetch Interceptor & Session Security ───────────────
+const _nativeFetch = window.fetch;
+window.fetch = async function(resource, init = {}) {
+  const token = localStorage.getItem('chatgcm_token') || localStorage.getItem('adminKey') || '';
+  init.headers = init.headers || {};
+  if (init.headers instanceof Headers) {
+    if (token && !init.headers.has('Authorization')) {
+      init.headers.set('Authorization', `Bearer ${token}`);
+    }
+    if (token && !init.headers.has('X-Admin-Key')) {
+      init.headers.set('X-Admin-Key', token);
+    }
+  } else if (Array.isArray(init.headers)) {
+    if (token) {
+      init.headers.push(['Authorization', `Bearer ${token}`]);
+      init.headers.push(['X-Admin-Key', token]);
+    }
+  } else {
+    if (token && !init.headers['Authorization']) {
+      init.headers['Authorization'] = `Bearer ${token}`;
+    }
+    if (token && !init.headers['X-Admin-Key']) {
+      init.headers['X-Admin-Key'] = token;
+    }
+  }
+
+  const response = await _nativeFetch(resource, init);
+  if (response.status === 401 && !String(resource).includes('/api/admin/login')) {
+    localStorage.removeItem('chatgcm_token');
+    localStorage.removeItem('adminKey');
+    window.location.replace('/login.html');
+  }
+  return response;
+};
+
+window.adminSignOut = function() {
+  localStorage.removeItem('chatgcm_token');
+  localStorage.removeItem('adminKey');
+  localStorage.removeItem('userRole');
+  window.location.replace('/login.html');
+};
+
 // Global State
 let currentTab = 'whatsapp-hub';
 let selectedWebsite = 'all';
@@ -870,7 +912,8 @@ function initSSEStream() {
     try { sseSource.close(); } catch {}
   }
 
-  sseSource = new EventSource('/api/whatsapp/stream');
+  const streamToken = localStorage.getItem('chatgcm_token') || localStorage.getItem('adminKey') || '';
+  sseSource = new EventSource('/api/whatsapp/stream?token=' + encodeURIComponent(streamToken));
 
   sseSource.onopen = () => {
     const statusEl = document.getElementById('live-sse-status');

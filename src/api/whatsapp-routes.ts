@@ -25,6 +25,7 @@ import {
   getMessageReceiptsByPhone 
 } from '../db/database.js';
 import { logLeadActivity } from '../crm/lead-service.js';
+import { requireAuth, extractAndVerifyToken } from '../middleware/auth.js';
 
 
 export const whatsappRouter = Router();
@@ -47,6 +48,12 @@ export function broadcastWhatsAppEvent(eventType: string, payload: any) {
  * 0.1 SSE Stream Endpoint for Instant Live Dashboard Sync (<50ms latency)
  */
 whatsappRouter.get('/stream', (req, res) => {
+  const authUser = extractAndVerifyToken(req);
+  if (!authUser) {
+    res.status(401).json({ success: false, error: 'Unauthorized: Valid token required for SSE stream.' });
+    return;
+  }
+
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -396,9 +403,13 @@ whatsappRouter.get('/status', (req, res) => {
   });
 });
 
+/**
+ * 4. Internal Administrative & Operational Routes (Mandatory Authentication)
+ */
+whatsappRouter.use(requireAuth);
 
 /**
- * 4. Manual Test Dispatcher
+ * 4.1 Manual Test Dispatcher
  */
 whatsappRouter.post('/send-test', async (req, res) => {
   const { phone, message } = req.body;
