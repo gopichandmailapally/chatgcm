@@ -53,6 +53,7 @@ import { executeToolCall } from './tool-executor.js';
 import { db } from '../db/database.js';
 import { knowledgeEngine } from './knowledge-engine.js';
 import { analyzeCustomerSchedule } from './scheduler-nlp.js';
+import { getConversationState } from './conversation-state.js';
 import { 
   detectCustomerLanguage, 
   detectCustomerCity, 
@@ -306,8 +307,11 @@ export async function processUserMessage(req: ChatRequest): Promise<ChatResponse
   }
 
   // ── 4. Intelligent Non-Intrusive Scheduling & Opt-Out NLP ─────────────────────
+  const convState = getConversationState(sessionId);
+  const isAwaitingAppointment = convState.stage === 'APPOINTMENT_REQUESTED' || convState.stage === 'ESTIMATE_PREPARED';
+
   const scheduleAnalysis = analyzeCustomerSchedule(userText, customerDisplayName, detectedCity, websiteId);
-  if (scheduleAnalysis.hasSchedulingIntent) {
+  if (!isAwaitingAppointment && scheduleAnalysis.hasSchedulingIntent) {
     if (detectedPhone) {
       let lead = existingCustomer || (db.prepare('SELECT id FROM leads WHERE phone LIKE ? LIMIT 1').get(`%${detectedPhone}%`) as any);
       if (!lead) {
@@ -466,11 +470,11 @@ Here are our verified company bank credentials for booking your order with ${bra
   // ═══════════════════════════════════════════════════════════════════════════
   // SCENARIO 2: HIGH DISCOUNT OWNER APPROVAL GUARDRAIL (Phase 8 & 14)
   // ═══════════════════════════════════════════════════════════════════════════
-  } else if (isDiscount) {
+  } else if (isDiscount && lower.match(/(\d+(?:\.\d+)?)\s*%/)) {
     const discMatch = lower.match(/(\d+(?:\.\d+)?)\s*%/);
-    const requestedDiscount = discMatch ? parseFloat(discMatch[1]) : 10.0;
+    const requestedDiscount = discMatch ? parseFloat(discMatch[1]) : null;
 
-    if (requestedDiscount > 5.0) {
+    if (requestedDiscount !== null && requestedDiscount > 5.0) {
       cardType = 'approval_notice';
       cardData = {
         status: 'OWNER_APPROVAL_REQUIRED',
@@ -483,9 +487,17 @@ Here are our verified company bank credentials for booking your order with ${bra
         ? `తప్పకుండా సర్. నేను స్వయంగా 5% వరకు డైరెక్ట్ డిస్కౌంట్ ఇవ్వగలను సర్. మీరు ${requestedDiscount}% డిస్కౌంట్ అడిగినందున, ఈ రిక్వెస్ట్ ని మా ఓనర్/మేనేజింగ్ డైరెక్టర్ ప్రత్యేక అనుమతి కోసం ఫార్వార్డ్ చేశాను. వారు పరిశీలించి వెంటనే మీకు బెస్ట్ రేట్ కన్ఫర్మ్ చేస్తారు సర్!`
         : `Under our autonomous pricing policy, I can directly approve up to 5% discount, sir. Since you requested a ${requestedDiscount}% discount, I have routed this request to our Managing Director for special commercial approval. We will get back to you immediately with the authorized price!`;
     } else {
-      replyText = detectedLang === 'telugu'
-        ? `తప్పకుండా సర్! మీ ఆర్డర్ కి 5% డైరెక్ట్ డిస్కౌంట్ వర్తింపజేస్తున్నాము.`
-        : `Certainly ${customerDisplayName}! I have applied our authorized 5% direct volume discount to your order.`;
+      // Delegate to consultative sales engine for tiered courtesy discounts
+      const consultantResult = handleSalesConversation({
+        sessionId,
+        websiteId,
+        userText,
+        customerName: customerDisplayName,
+        phone: detectedPhone || undefined
+      });
+      replyText = consultantResult.replyText;
+      cardType = consultantResult.cardType;
+      cardData = consultantResult.cardData;
     }
 
   // ═══════════════════════════════════════════════════════════════════════════

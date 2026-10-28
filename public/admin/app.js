@@ -2451,6 +2451,7 @@ function toggleCustomerPanel() {
   const hub = document.querySelector('.wa-hub-layout');
   if (hub) {
     hub.classList.toggle('details-collapsed');
+    hub.classList.toggle('details-open');
   }
 }
 

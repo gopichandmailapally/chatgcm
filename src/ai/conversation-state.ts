@@ -41,6 +41,8 @@ export type ConversationStage =
   | 'PAYMENT_CLAIMED'
   | 'FOLLOW_UP'
   | 'SITE_VISIT_REQUESTED'
+  | 'APPOINTMENT_REQUESTED'
+  | 'APPOINTMENT_PENDING_ADMIN'
   | 'HUMAN_HANDOFF';
 
 // Backward compatibility alias for legacy callers
@@ -87,9 +89,12 @@ export interface CustomerRequirementProfile {
   customerConfirmed: boolean;
   estimateStatus: 'NONE' | 'PRELIMINARY' | 'PREPARED' | 'OFFICIAL_QUOTE';
   approvalStatus: 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED';
+  offeredDiscountPct?: number;
+  preferredAppointmentSlot?: string;
 }
 
 export interface ConversationState {
+  lead_id?: string;
   introduction_completed: boolean;
   active_product_category: ProductCategory | null;
   customer_intent: string | null;

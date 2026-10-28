@@ -24,6 +24,7 @@ import {
   isProductComparisonQuestion,
   canTransition
 } from "./conversation-state.js";
+import { db } from "../db/database.js";
 
 import {
   calculateLandscapeGrassRolls,
@@ -136,6 +137,53 @@ export function extractRolls(text: string): number | undefined {
     return parseInt(rollsMatch[1], 10);
   }
   return undefined;
+}
+
+export function extractItemQuantity(text: string): number | null {
+  const clean = text.trim().toLowerCase();
+
+  // Word to number mapping
+  const wordMap: Record<string, number> = {
+    'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+    'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+    'okati': 1, 'vokati': 1, 'rendu': 2, 'moodu': 3, 'nalugu': 4, 'aidu': 5,
+    'ek': 1, 'do': 2, 'teen': 3, 'theen': 3, 'char': 4, 'chaar': 4, 'paanch': 5
+  };
+
+  for (const [w, val] of Object.entries(wordMap)) {
+    if (new RegExp(`\\b${w}\\b`, 'i').test(clean)) {
+      return val;
+    }
+  }
+
+  // Pattern with units / sets / pcs / pieces / nos
+  const matchWithUnit = clean.match(/(\d+)\s*(?:hangers?|units?|sets?|nos?\.?|pieces?|pcs?|rods?|pipes?|required|kavali|chahiye)\b/i);
+  if (matchWithUnit && matchWithUnit[1]) {
+    const parsed = parseInt(matchWithUnit[1], 10);
+    if (!isNaN(parsed) && parsed > 0 && parsed <= 500) {
+      return parsed;
+    }
+  }
+
+  // Pattern with verbs: "i need 3", "require 3", "want 3"
+  const matchVerb = clean.match(/(?:need|require|want|take|order|give|send|kavali|chahiye)\s*(\d+)/i);
+  if (matchVerb && matchVerb[1]) {
+    const parsed = parseInt(matchVerb[1], 10);
+    if (!isNaN(parsed) && parsed > 0 && parsed <= 500) {
+      return parsed;
+    }
+  }
+
+  // Standalone numbers: "3", "3.", "3units"
+  const standalone = clean.match(/^\s*(\d+)\s*(?:units?|sets?|pcs?|nos?)?\.?\s*$/i);
+  if (standalone && standalone[1]) {
+    const parsed = parseInt(standalone[1], 10);
+    if (!isNaN(parsed) && parsed > 0 && parsed <= 500) {
+      return parsed;
+    }
+  }
+
+  return null;
 }
 
 export function detectProductCategory(text: string): ProductCategory | null {
@@ -299,15 +347,11 @@ export function handleSalesConversation(input: SalesConsultantInput): SalesConsu
 
   // Repeated greeting in ongoing conversation
   if (isGreetingOnly && state.introduction_completed) {
-    if (state.active_product_category === "landscape_grass") {
-      return { replyText: "Hello! Are you looking for balcony, garden, or terrace artificial grass?" };
-    } else if (state.active_product_category === "cricket_net") {
-      return { replyText: "Hello! What are your ground dimensions (Length, Width, and Height in feet)?" };
-    } else if (state.active_product_category === "pigeon_safety_net") {
-      return { replyText: "Hello! What are your balcony dimensions (Length and Height in feet)?" };
-    } else {
-      return { replyText: "Hello! How can I assist you with safety nets, cricket netting, grass, or invisible grills today?" };
-    }
+    return {
+      replyText: lang === "telugu"
+        ? "నమస్కారం! జిసిఎమ్ ఎంటర్‌ప్రైజెస్ కు స్వాగతం. బాల్కనీ సేఫ్టీ నెట్స్, క్లాత్ డ్రైయింగ్ హ్యాంగర్స్, ఇన్విజిబుల్ గ్రిల్స్ లేదా స్పోర్ట్స్ టర్ఫ్ లలో మీకు ఎలా సహాయపడగలను సర్?"
+        : "Hello! Welcome to GCM Enterprises. We specialize in balcony safety nets, cloth drying hangers, invisible grills, sports turf, and cricket netting. How can I assist you today?"
+    };
   }
 
   // 3B. Customer Decision Pending Rule (Phase 15)
@@ -333,8 +377,14 @@ export function handleSalesConversation(input: SalesConsultantInput): SalesConsu
   }
 
   // 3D. Pricing Negotiation & Floor Protection (Phase 5)
-  const isBelowFloorRequest = /\b(?:give|do|make\s*it|for)\s*(?:at\s*)?(?:rs\.?|₹)?\s*(1[0-9]|2[0-3])\s*(?:per\s*sft|\/sft)?\b/i.test(lower) || /(?:give|want)\s*(?:1[5-9]|[2-9][0-9])%\s*discount/i.test(lower);
-  const isAskingDiscount = /(?:any\s*discount|can\s*you\s*(?:give\s*)?discount|give\s*(?:some\s*)?discount|reduce\s*(?:the\s*)?(?:price|rate|cost)|kam\s*karo|thaggimpu|any\s*concession|best\s*price|kamti|bargain)/i.test(lower);
+  const discPctMatch = lower.match(/(\d+(?:\.\d+)?)\s*%/);
+  const explicitPct = discPctMatch ? parseFloat(discPctMatch[1]) : null;
+
+  const isBelowFloorRequest = (explicitPct !== null && explicitPct > 5.0) ||
+    /\b(?:give|do|make\s*it|for)\s*(?:at\s*)?(?:rs\.?|₹)?\s*(1[0-9]|2[0-3])\s*(?:per\s*sft|\/sft)?\b/i.test(lower) ||
+    /(?:give|want)\s*(?:1[0-9]|[2-9][0-9])%\s*discount/i.test(lower);
+
+  const isAskingDiscount = /(?:any\s*discount|can\s*you\s*(?:give\s*)?discount|give\s*(?:some\s*)?discount|make\s*discount|reduce\s*(?:the\s*)?(?:price|rate|cost)|kam\s*karo|thaggimpu|any\s*concession|best\s*price|kamti|bargain|discount\s*if\s*possible)/i.test(lower);
 
   if (isBelowFloorRequest && (state.stage === 'ESTIMATE_PREPARED' || state.active_quote || state.stage === 'REQUIREMENT_CONFIRMATION')) {
     state.stage = "QUOTATION_PENDING_APPROVAL";
@@ -350,8 +400,73 @@ export function handleSalesConversation(input: SalesConsultantInput): SalesConsu
         replyText: "We can offer an authorized direct-discount rate of ₹25/SFT for complete installation with SS 316 wire and 5-year warranty. Shall I update your estimate with this rate?"
       };
     } else {
+      const currentOffered = state.profile.offeredDiscountPct || 0;
+      let nextDiscount = 3; // First round: 3%
+      if (currentOffered === 3) nextDiscount = 4; // Second round: 4%
+      else if (currentOffered >= 4) nextDiscount = 5; // Third round: 5% max
+
+      state.profile.offeredDiscountPct = nextDiscount;
+      saveConversationState(sessionId, state);
+
+      const baseAmount = state.active_quote?.totalAmount || 0;
+      const discountedAmount = baseAmount > 0 ? Math.round(baseAmount * (1 - nextDiscount / 100)) : 0;
+      const amountStr = discountedAmount > 0 ? ` (bringing your total to ₹${discountedAmount.toLocaleString('en-IN')})` : '';
+
+      if (lang === 'telugu') {
+        return {
+          replyText: `తప్పకుండా సర్! మీ ఆర్డర్ కి మేము ${nextDiscount}% డైరెక్ట్ డిస్కౌంట్ వర్తింపజేస్తున్నాము${amountStr}. మేము మీ ఇన్స్టాలేషన్ అపాయింట్‌మెంట్ బుక్ చేయవచ్చా సర్?`
+        };
+      } else {
+        return {
+          replyText: `We understand, sir! As a valued customer, I can directly apply an authorized ${nextDiscount}% courtesy discount to your order${amountStr}. Shall we proceed with reserving your installation appointment?`
+        };
+      }
+    }
+  }
+
+  // 3E. Appointment Booking & Technician Scheduling Intent (Post-Estimate Workflow)
+  const isBookingIntent = /(?:book|reserve|schedule|appointment|slot|technician|installation|visit|come\s*(?:tomorrow|today|and)|send\s*person|send\s*technician|fit\s*cheyandi|vastara)\b/i.test(lower);
+  const isAffirmative = /^(yes|sure|proceed|ok|okay|please|yes\s*please|definitely|avunu|sare|ha|theek\s*hai)\b/i.test(lower.trim());
+  const dateMatch = userText.match(/\b(?:tomorrow|today|day\s*after\s*tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}(?:st|nd|rd|th)?\s*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)?)\b/i);
+  const timeMatch = userText.match(/\b(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)|morning|afternoon|evening|\d{1,2}\s*(?:o'?clock))\b/i);
+  const isSlotGiven = Boolean(dateMatch || timeMatch);
+
+  const inAppointmentWorkflow = (state.stage === 'APPOINTMENT_REQUESTED') ||
+    ((state.stage === 'ESTIMATE_PREPARED' || state.active_quote) && (isBookingIntent || isAffirmative || isSlotGiven));
+
+  if (inAppointmentWorkflow) {
+    if (!dateMatch && !timeMatch) {
+      state.stage = "APPOINTMENT_REQUESTED";
+      saveConversationState(sessionId, state);
       return {
-        replyText: "We can extend an authorized courtesy discount of 5% on your estimate. Shall I update your quote with this discount?"
+        replyText: lang === 'telugu'
+          ? "ఖచ్చితంగా సర్! మా సర్టిఫైడ్ టెక్నీషియన్ ద్వారా డోర్‌స్టెప్ ఇన్‌స్టాలేషన్ ఏర్పాటు చేయడానికి మీ ప్రాధాన్యత కలిగిన తేదీ మరియు సమయం (ఉదాహరణకు రేపు ఉదయం 11:00 AM లేదా శనివారం) తెలియజేయగలరా సర్?"
+          : `Wonderful! We would be delighted to schedule our certified technician for your doorstep installation in ${state.customer_location || 'Hyderabad'}. What date and preferred time slot work best for you (e.g., Tomorrow at 11:00 AM or Saturday morning)?`
+      };
+    } else {
+      const preferredSlot = `${dateMatch ? dateMatch[0] : 'Tomorrow'} ${timeMatch ? timeMatch[0] : 'Morning'}`.trim();
+      state.stage = "APPOINTMENT_PENDING_ADMIN";
+      state.profile.preferredAppointmentSlot = preferredSlot;
+      saveConversationState(sessionId, state);
+
+      try {
+        const approvalId = 'APP-SCH-' + Date.now().toString(36);
+        db.prepare(`
+          INSERT INTO owner_approvals (id, lead_id, reason, requested_discount_pct, status)
+          VALUES (?, ?, ?, 0, 'PENDING')
+        `).run(
+          approvalId,
+          state.lead_id || ('LEAD-' + sessionId.replace(/\D/g, '').slice(-8)),
+          `Customer requested installation appointment: "${preferredSlot}" for ${state.active_product_category || 'Service'}`
+        );
+      } catch (err) {
+        // Fallback safely
+      }
+
+      return {
+        replyText: lang === 'telugu'
+          ? `ధన్యవాదాలు సర్! మీ ప్రాధాన్యత కలిగిన సమయం (${preferredSlot}) ను మా ఆపరేషన్స్ కోఆర్డినేటర్ మరియు డోర్‌స్టెప్ టీమ్‌కి పంపించాము. టెక్నీషియన్ రూట్ కన్ఫర్మ్ చేసి మీకు కొద్దిసేపట్లో ఫైనల్ కన్ఫర్మేషన్ తెలియజేస్తాము సర్!`
+          : `Thank you, sir! I have recorded your preferred appointment for ${preferredSlot}. Because our technicians have active field routes, I have submitted this slot to our operations coordinator on the admin console for route confirmation. We will confirm your technician arrival slot shortly!`
       };
     }
   }
@@ -489,21 +604,43 @@ export function handleSalesConversation(input: SalesConsultantInput): SalesConsu
 
   // ── 9. CATEGORY: CLOTH DRYING HANGERS (Phase 4.8 — Zero Assumptions) ──────
   if (state.active_product_category === "cloth_hanger") {
+    // If estimate is already prepared, delegate to booking / scheduling / question answering
+    if (state.stage === "ESTIMATE_PREPARED" && state.active_quote) {
+      // Handled by Section 3E (Appointment Booking) or general conversation
+      return {
+        replyText: lang === "telugu"
+          ? "మీ క్లాత్ డ్రైయింగ్ హ్యాంగర్ కొటేషన్ సిద్ధంగా ఉంది సర్. మా నిపుణులైన టెక్నీషియన్ ద్వారా డోర్‌స్టెప్ ఇన్‌స్టాలేషన్ ఏర్పాటు చేయడానికి మీ ప్రాధాన్యత సమయం (తేదీ/సమయం) తెలియజేయగలరా సర్?"
+          : `Your cloth hanger estimate of ₹${(state.active_quote.totalAmount || 0).toLocaleString('en-IN')} is ready. Would you like to schedule an installation appointment? Please let me know your preferred date and time.`
+      };
+    }
+
     const isWallMount = lower.includes("wall");
     const isCeilingMount = lower.includes("ceiling") || lower.includes("pulley");
 
     if (isWallMount) state.selected_material = "wall";
     else if (isCeilingMount) state.selected_material = "ceiling";
 
-    const sizeMatch = userText.match(/\b([45678])\s*(?:ft|feet|foot|'|rod)\b/i);
-    if (sizeMatch) {
+    // Size detection: handles 4ft, 5ft, 6ft, 7ft, 8ft, or standalone digit 4..8 if size missing
+    const sizeMatchWithUnit = userText.match(/\b([45678])\s*(?:ft|feet|foot|'|rod)\b/i);
+    if (sizeMatchWithUnit) {
       if (!state.confirmed_dimensions) state.confirmed_dimensions = {};
-      state.confirmed_dimensions.length = parseInt(sizeMatch[1], 10);
+      state.confirmed_dimensions.length = parseInt(sizeMatchWithUnit[1], 10);
+    } else if (!state.confirmed_dimensions?.length) {
+      const standaloneSize = userText.trim().match(/^([45678])(?:\s*(?:ft|feet|foot|'|rod))?\.?$/i);
+      if (standaloneSize) {
+        if (!state.confirmed_dimensions) state.confirmed_dimensions = {};
+        state.confirmed_dimensions.length = parseInt(standaloneSize[1], 10);
+      }
     }
 
-    const qtyMatch = userText.match(/(\d+)\s*(?:hangers?|units?|sets?|nos?|pieces?)\b/i);
-    if (qtyMatch) {
-      state.profile.quantity = parseInt(qtyMatch[1], 10);
+    // Quantity detection: uses robust natural extractor supporting words, digits, verbs
+    if (!state.profile.quantity) {
+      const extractedQty = extractItemQuantity(userText);
+      if (extractedQty && extractedQty !== state.confirmed_dimensions?.length) {
+        state.profile.quantity = extractedQty;
+      } else if (extractedQty && !sizeMatchWithUnit) {
+        state.profile.quantity = extractedQty;
+      }
     }
 
     const cityMatch = userText.match(/\b(hyderabad|secunderabad|bangalore|bengaluru|chennai|vijayawada|visakhapatnam|vizag|guntur|warangal)\b/i);
