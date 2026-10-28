@@ -198,9 +198,9 @@
       </div>
 
       <!-- Main Content Views -->
-      <div class="content-wrapper">
-        <!-- Live Metric Stats -->
-        <div class="stats-grid" id="global-stats-grid">
+      <div class="content-wrapper hub-mode">
+        <!-- Live Metric Stats (Hidden on Multi-Agent Inbox for true full-height workspace, visible on CRM & Reports) -->
+        <div class="stats-grid" id="global-stats-grid" style="display:none;">
           <div class="stat-card" style="--stat-color:var(--accent-indigo);">
             <div class="stat-icon" style="color:var(--accent-indigo);">
               <i class="fas fa-users-viewfinder"></i>
@@ -284,30 +284,31 @@
             <!-- Right: Active Chat Window -->
             <div class="wa-chat-window">
               <div class="wa-chat-header" id="wa-chat-header">
-                <div class="wa-chat-user">
-                  <button class="wa-back-btn" id="wa-mobile-back-btn" onclick="closeMobileChat()" title="Back to chats" style="display:none;">
-                    <i class="fas fa-arrow-left"></i>
-                  </button>
-                  <div class="wa-avatar-wrap">
-                    <div class="wa-avatar" id="active-chat-avatar">G</div>
-                    <span class="avatar-live-indicator"></span>
-                  </div>
-                  <div class="wa-user-details">
-                    <div class="wa-user-title-row">
-                      <h4 id="active-chat-name">Select a conversation</h4>
-                      <i class="fas fa-certificate wa-verified-icon" title="Verified WhatsApp Customer"></i>
-                      <span class="thread-priority-tag p2" id="active-priority-badge" style="display:none;">P2</span>
+                <!-- Tier 1: Customer Identity & Staff Ownership -->
+                <div class="wa-chat-header-row top-row">
+                  <div class="wa-chat-user">
+                    <button class="wa-back-btn" id="wa-mobile-back-btn" onclick="closeMobileChat()" title="Back to chats" style="display:none;">
+                      <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <div class="wa-avatar-wrap">
+                      <div class="wa-avatar" id="active-chat-avatar">G</div>
+                      <span class="avatar-live-indicator"></span>
                     </div>
-                    <div class="wa-user-meta-row">
-                      <span class="wa-user-phone" id="active-chat-phone">+91 ----------</span>
-                      <span class="brand-sub-badge" id="active-chat-brand" style="display:none;">gcmsafetynets.in</span>
+                    <div class="wa-user-details">
+                      <div class="wa-user-title-row">
+                        <h4 id="active-chat-name">Select a conversation</h4>
+                        <i class="fas fa-certificate wa-verified-icon" title="Verified WhatsApp Customer"></i>
+                        <span class="thread-priority-tag p2" id="active-priority-badge" style="display:none;">P2</span>
+                      </div>
+                      <div class="wa-user-meta-row">
+                        <span class="wa-user-phone" id="active-chat-phone">+91 ----------</span>
+                        <span class="brand-sub-badge" id="active-chat-brand" style="display:none;">gcmsafetynets.in</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div class="wa-chat-actions" id="active-chat-actions" style="display:none;">
-                  <!-- Lead Management Controls -->
-                  <div class="chat-controls-group">
+                  <div class="wa-header-top-actions">
+                    <!-- Assigned Team Member -->
                     <div class="chat-control-pill" title="Assigned Team Member">
                       <i class="fas fa-user-tag control-icon"></i>
                       <select id="active-chat-assigned-agent" class="chat-meta-select-compact" onchange="changeActiveAssignedAgent(this.value)">
@@ -319,6 +320,17 @@
                       </select>
                     </div>
 
+                    <!-- AI Auto-Pilot Switch -->
+                    <button class="chat-autopilot-btn" id="btn-toggle-autopilot" onclick="toggleAutoPilot()" title="Toggle Autonomous AI Bot vs Human Control">
+                      <span class="autopilot-dot"></span>
+                      <span id="autopilot-text">AI Auto-Pilot: ON</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Tier 2: Pipeline Stage, Priority & Quick Action Toolbelt -->
+                <div class="wa-chat-header-row bottom-row" id="active-chat-actions" style="display:none;">
+                  <div class="wa-pipeline-controls">
                     <div class="chat-control-pill" title="Pipeline Stage">
                       <i class="fas fa-columns control-icon"></i>
                       <select id="active-thread-stage" class="chat-meta-select-compact" onchange="changeThreadStage(this.value)">
@@ -366,13 +378,9 @@
                       <i class="fas fa-building-columns"></i>
                       <span>Bank / QR</span>
                     </button>
-
-                    <button class="chat-autopilot-btn" id="btn-toggle-autopilot" onclick="toggleAutoPilot()" title="Toggle Autonomous AI Bot vs Human Control">
-                      <span class="autopilot-dot"></span>
-                      <span id="autopilot-text">AI Auto-Pilot: ON</span>
-                    </button>
                   </div>
                 </div>
+              </div>
               </div>
 
               <!-- Message Stream -->

@@ -100,7 +100,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initial tab setup: ensure global stats are appropriately hidden for full-screen operational tools
   const globalStats = document.getElementById('global-stats-grid');
-  if (globalStats && (currentTab === 'whatsapp-hub' || currentTab === 'meta-connection' || currentTab === 'catalog-syncer')) {
+  const contentWrapper = document.querySelector('.content-wrapper');
+  if (currentTab === 'whatsapp-hub') {
+    if (globalStats) globalStats.style.display = 'none';
+    if (contentWrapper) contentWrapper.classList.add('hub-mode');
+  } else if (globalStats && (currentTab === 'meta-connection' || currentTab === 'catalog-syncer')) {
     globalStats.style.display = 'none';
   }
 
@@ -203,13 +207,21 @@ function switchTab(tabId) {
     document.getElementById('tab-subheading').textContent = headers[tabId][1];
   }
 
-  // Global Stats visibility toggle: hide on full-height operational tools to eliminate vertical crowding
+  // Global Stats & full-screen workspace toggle
   const globalStats = document.getElementById('global-stats-grid');
-  if (globalStats) {
-    if (tabId === 'whatsapp-hub' || tabId === 'meta-connection' || tabId === 'catalog-syncer') {
-      globalStats.style.display = 'none';
-    } else {
-      globalStats.style.display = 'grid';
+  const contentWrapper = document.querySelector('.content-wrapper');
+
+  if (tabId === 'whatsapp-hub') {
+    if (globalStats) globalStats.style.display = 'none';
+    if (contentWrapper) contentWrapper.classList.add('hub-mode');
+  } else {
+    if (contentWrapper) contentWrapper.classList.remove('hub-mode');
+    if (globalStats) {
+      if (tabId === 'meta-connection' || tabId === 'catalog-syncer') {
+        globalStats.style.display = 'none';
+      } else {
+        globalStats.style.display = 'grid';
+      }
     }
   }
 
@@ -289,7 +301,16 @@ async function loadWhatsAppConversations() {
     const res = await fetch('/api/whatsapp/conversations');
     const data = await res.json();
     if (data.success && Array.isArray(data.conversations)) {
-      allConversations = data.conversations;
+      // Deduplicate conversations by clean 10-digit phone
+      const uniqueConversations = [];
+      const seenPhones = new Set();
+      for (const c of data.conversations) {
+        const key = (c.phone || '').replace(/\D/g, '').slice(-10);
+        if (!key || seenPhones.has(key)) continue;
+        seenPhones.add(key);
+        uniqueConversations.push(c);
+      }
+      allConversations = uniqueConversations;
       document.getElementById('stat-wa-chats').textContent = allConversations.length;
       document.getElementById('wa-active-count').textContent = allConversations.length;
       renderWhatsAppThreadsList();
@@ -370,7 +391,17 @@ function renderWhatsAppThreadsList() {
            lastContent.toLowerCase().includes(query);
   });
 
-  if (filtered.length === 0) {
+  // Client-side deduplication to guarantee no double cards
+  const uniqueFiltered = [];
+  const seenFilterPhones = new Set();
+  for (const c of filtered) {
+    const key = (c.phone || '').replace(/\D/g, '').slice(-10);
+    if (!key || seenFilterPhones.has(key)) continue;
+    seenFilterPhones.add(key);
+    uniqueFiltered.push(c);
+  }
+
+  if (uniqueFiltered.length === 0) {
     container.innerHTML = `
       <div style="padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px;">
         <i class="fab fa-whatsapp" style="font-size: 24px; opacity:0.5; margin-bottom:8px; display:block;"></i>
@@ -380,7 +411,7 @@ function renderWhatsAppThreadsList() {
     return;
   }
 
-  container.innerHTML = filtered.map(c => {
+  container.innerHTML = uniqueFiltered.map(c => {
     const cleanPhone = (c.phone || '').replace(/\D/g, '');
     const isActive = activeChatPhone === cleanPhone;
     const custName = c.customerName || c.customer_name || ('Client +' + cleanPhone.slice(-4));
@@ -495,11 +526,15 @@ async function selectConversation(phone) {
   if (custPanelDimensions) custPanelDimensions.textContent = thread?.dimensions || activeChatLead?.dimensions || 'Pending measurement';
   if (custPanelPrice) custPanelPrice.textContent = thread?.total_amount ? ('₹' + Number(thread.total_amount).toLocaleString('en-IN')) : '₹--';
 
-  // Mobile layout switch to chat view
+  // Mobile layout switch to chat view (only if on screen <= 768px)
   const hubLayout = document.querySelector('.wa-hub-layout');
-  if (hubLayout) hubLayout.classList.add('mobile-chat-open');
   const mobileBackBtn = document.getElementById('wa-mobile-back-btn');
-  if (mobileBackBtn) mobileBackBtn.style.display = 'inline-flex';
+  if (window.innerWidth <= 768) {
+    if (hubLayout) hubLayout.classList.add('mobile-chat-open');
+    if (mobileBackBtn) mobileBackBtn.style.display = 'inline-flex';
+  } else {
+    if (mobileBackBtn) mobileBackBtn.style.display = 'none';
+  }
 
   loadInternalNotes(cleanPhone);
 

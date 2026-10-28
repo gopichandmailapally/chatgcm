@@ -480,7 +480,27 @@ whatsappRouter.get('/conversations', (req, res) => {
       };
     });
 
-    res.json({ success: true, conversations });
+    // Deduplicate conversations by phone number (last 10 digits) so no customer appears twice
+    const deduplicatedMap = new Map<string, any>();
+    for (const c of conversations) {
+      const cleanPhone = (c.phone || '').replace(/\D/g, '').slice(-10);
+      if (!cleanPhone) continue;
+
+      if (!deduplicatedMap.has(cleanPhone)) {
+        deduplicatedMap.set(cleanPhone, c);
+      } else {
+        const existing = deduplicatedMap.get(cleanPhone);
+        const existingTime = new Date(existing.updatedAt || 0).getTime();
+        const currentTime = new Date(c.updatedAt || 0).getTime();
+        // Prefer record with newer update or more complete message history
+        if (currentTime > existingTime || (c.messageCount > existing.messageCount)) {
+          deduplicatedMap.set(cleanPhone, c);
+        }
+      }
+    }
+
+    const uniqueConversations = Array.from(deduplicatedMap.values());
+    res.json({ success: true, conversations: uniqueConversations });
   } catch (err: any) {
     console.error('Error fetching conversations:', err);
     res.status(500).json({ success: false, error: err.message });
